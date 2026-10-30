@@ -119,8 +119,8 @@ adb lives in `%LOCALAPPDATA%\Android\Sdk\platform-tools` (not on PATH).
 
 ## Current project state
 
-Phases 1–5 of `docs/PLAN.md` are done (foundations, look & feel, Add Friend, Home + details +
-Call, Edit & Remove); later phases fill in the placeholder screens (`ui/common/ComingSoon`).
+Phases 1–6 of `docs/PLAN.md` are done (foundations, look & feel, Add Friend, Home + details +
+Call, Edit & Remove, Statistics); phase 7 (Settings & polish) remains.
 
 - `data/` — Room schema v1: `friends` (position/turnUsed rotation columns, notes), `calls` (one row
   per friend per day pressed; `scheduled`, `consumedTurn`; FK `SET NULL` on removal),
@@ -171,6 +171,12 @@ Call, Edit & Remove); later phases fill in the placeholder screens (`ui/common/C
 - `ui/removefriend/` — Remove Friend: A–Z searchable, whole row toggles the checkbox, red
   "Remove (n)" → confirm ("Their notes go with them. Past calls stay in Statistics.") → back to
   Menu. Calls keep the friend's name snapshot (FK `SET NULL`).
+- `ui/statistics/` — **all numbers come from the pure `callStats`** (pinned by `CallStatsTest`):
+  friends, calls made (removed friends' calls included), this month = days with a call / days so
+  far (from the start, if that was this month), current streak (an uncalled today keeps
+  yesterday's), longest streak, never called, a month calendar (days before the owner started
+  are neutral, not missed), "Longest since a call" (top 3), calls per month for six months.
+  **No per-friend call counts** — they would reveal pass boundaries.
 - `util/Caller` — interface + `AndroidCaller`, provided through `LocalCaller` so UI tests can use a
   fake that never dials. **Never place a real call while testing**: deny the phone permission or
   turn "Call directly" off, and back out of the dialer.

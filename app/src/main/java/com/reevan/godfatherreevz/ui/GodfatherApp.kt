@@ -24,7 +24,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.reevan.godfatherreevz.ui.addfriend.AddFriendScreen
 import com.reevan.godfatherreevz.ui.common.AppMessages
 import com.reevan.godfatherreevz.ui.common.BreadcrumbHeader
-import com.reevan.godfatherreevz.ui.common.ComingSoon
 import com.reevan.godfatherreevz.ui.common.HeaderActions
 import com.reevan.godfatherreevz.ui.common.HomeHeader
 import com.reevan.godfatherreevz.ui.common.LocalAppMessages
@@ -48,6 +47,7 @@ import com.reevan.godfatherreevz.ui.navigation.popTo
 import com.reevan.godfatherreevz.ui.navigation.pushFrom
 import com.reevan.godfatherreevz.ui.removefriend.RemoveFriendScreen
 import com.reevan.godfatherreevz.ui.settings.SettingsScreen
+import com.reevan.godfatherreevz.ui.statistics.StatisticsScreen
 import com.reevan.godfatherreevz.util.TodayClock
 import com.reevan.godfatherreevz.util.formatHeaderDate
 
@@ -162,7 +162,7 @@ fun GodfatherApp() {
                     )
                 }
                 Destination.RemoveFriend -> RemoveFriendScreen(onRemoved = finish(Destination.RemoveFriend))
-                Destination.Statistics -> ComingSoon("Statistics", phase = 6)
+                Destination.Statistics -> StatisticsScreen()
                 // Keyed by friend, so one friend's page state can never carry into another's.
                 is Destination.FriendDetails -> key(current.friendId) {
                     FriendDetailsScreen(friendId = current.friendId, onGone = finish(current))
