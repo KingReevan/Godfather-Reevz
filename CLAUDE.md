@@ -73,14 +73,12 @@ Instrumented tests (`connectedDebugAndroidTest`):
 uninstalls the app when it finishes, and `AppFlowsTest` wipes the database — on the phone that
 would delete the owner's friends, notes, call history and photos. Wake and unlock the emulator
 first (`adb -s emulator-5554 shell "input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard"`) or
-every UI test fails with "No compose hierarchies found". If tests ever must run on the phone,
-back up first and restore after: `adb exec-out run-as com.reevan.godfatherreevz cat
-databases/<file>` for `godfather-reevz.db`, `-wal` and `-shm` (force-stop the app first), and
-`adb exec-out run-as com.reevan.godfatherreevz tar -cf - files/photos > photos.tar`.
+every UI test fails with "No compose hierarchies found". Never run them on the phone.
 
-Before installing a build with a schema change on the phone: back up as above, then dry-run the
-upgrade on the emulator with that backup (install, `run-as` copy the three files into
-`databases/`, launch, pull them back and compare the rows), then uninstall it from the emulator.
+**No backups of the phone's data** (the owner's choice, 2026-10-30): don't copy its database or
+photos off the phone. A schema change is proven before it goes on the phone by its migration test
+on the emulator — a database built exactly as the previous schema, upgraded by Room (see
+`upgradingFromV1KeepsEverything`).
 
 Target phone: **Nothing Phone (2a), Android 16 (API 36)**, adb serial `00050146M001006`. Update it
 with `adb -s 00050146M001006 install -r app/build/outputs/apk/debug/app-debug.apk` (keeps data).
