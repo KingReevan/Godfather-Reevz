@@ -34,10 +34,12 @@ import com.reevan.godfatherreevz.data.AppTheme
 import com.reevan.godfatherreevz.data.GodfatherDatabase
 import com.reevan.godfatherreevz.data.NewFriend
 import com.reevan.godfatherreevz.ui.details.CALL_BUTTON_TAG
+import com.reevan.godfatherreevz.ui.details.WHATSAPP_BUTTON_TAG
 import com.reevan.godfatherreevz.ui.home.TODAY_CARD_TAG
 import com.reevan.godfatherreevz.util.AndroidCaller
 import com.reevan.godfatherreevz.util.Caller
 import com.reevan.godfatherreevz.util.TodayClock
+import com.reevan.godfatherreevz.util.WhatsAppResult
 import com.reevan.godfatherreevz.util.formatCallDate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -52,14 +54,22 @@ import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.random.Random
 
-/** Places no calls; remembers what it was asked to dial. */
+/** Places no calls; remembers what it was asked to dial, on the phone and on WhatsApp. */
 class FakeCaller : Caller {
     val dialled = CopyOnWriteArrayList<String>()
+    val whatsApped = CopyOnWriteArrayList<String>()
+    @Volatile var whatsAppInstalled = true
+    @Volatile var whatsAppResult = WhatsAppResult.CALLING
     override fun canCall(context: Context) = true
     override fun mayCallDirectly(context: Context) = true
     override fun call(context: Context, phone: String, direct: Boolean): Boolean {
         dialled += phone
         return true
+    }
+    override fun hasWhatsApp(context: Context) = whatsAppInstalled
+    override suspend fun callOnWhatsApp(context: Context, phone: String): WhatsAppResult {
+        whatsApped += phone
+        return whatsAppResult
     }
 }
 
@@ -194,8 +204,7 @@ class AppFlowsTest {
         assertEquals(listOf(head.phone), caller.dialled.toList())
 
         // Again the same day: redials, but counts nothing new.
-        waitFor("Call again")
-        compose.mainClock.advanceTimeBy(1_600) // past the button's double-tap cool-down
+        compose.mainClock.advanceTimeBy(1_600) // past the buttons' double-tap cool-down
         compose.onNodeWithTag(CALL_BUTTON_TAG).performClick()
         waitUntil { caller.dialled.size == 2 }
         assertEquals(1, calls().size)
@@ -216,7 +225,7 @@ class AppFlowsTest {
 
         compose.onNodeWithText("Undo").performClick()
         compose.onNodeWithText("Undo call").performClick()
-        waitFor("Call ${head.name}")
+        waitFor("TODAY'S CALL")
         assertTrue(calls().isEmpty())
         assertEquals(head.id, order().first().friend.id)
     }
@@ -235,6 +244,46 @@ class AppFlowsTest {
         assertEquals(before.first().friend.id, after.first().friend.id)
         assertTrue(after.first { it.friend.id == other.id }.friend.turnUsed)
         assertTrue(!calls().single().scheduled)
+    }
+
+    @Test
+    fun aWhatsAppCall_countsLikeACall_andAgainOnlyCallsAgain() {
+        seedThree()
+        val head = order().first().friend
+        todayCard().performClick()
+
+        compose.onNodeWithTag(WHATSAPP_BUTTON_TAG).performClick()
+        waitFor("Called today")
+        assertEquals(listOf(head.phone), caller.whatsApped.toList())
+        assertTrue(caller.dialled.isEmpty())
+        assertTrue(calls().single().scheduled)
+
+        // Again, and WhatsApp can only open the chat: says so, counts nothing new.
+        caller.whatsAppResult = WhatsAppResult.CHAT
+        compose.mainClock.advanceTimeBy(1_600)
+        compose.onNodeWithTag(WHATSAPP_BUTTON_TAG).performClick()
+        waitFor("Opened the chat", substring = true)
+        assertEquals(2, caller.whatsApped.size)
+        assertEquals(1, calls().size)
+
+        // And the phone button still calls too.
+        compose.mainClock.advanceTimeBy(1_600)
+        compose.onNodeWithTag(CALL_BUTTON_TAG).performClick()
+        waitUntil { caller.dialled.size == 1 }
+        assertEquals(1, calls().size)
+    }
+
+    @Test
+    fun aWhatsAppCall_withoutWhatsApp_countsNothing() {
+        seedThree()
+        caller.whatsAppInstalled = false
+        todayCard().performClick()
+
+        compose.onNodeWithTag(WHATSAPP_BUTTON_TAG).performClick()
+        waitFor("WhatsApp isn't installed")
+        assertTrue(caller.whatsApped.isEmpty())
+        assertTrue(calls().isEmpty())
+        compose.onNodeWithText("TODAY'S CALL").assertIsDisplayed()
     }
 
     // ---- Add, Edit, Remove --------------------------------------------------------------------

@@ -3,12 +3,13 @@
 > The plan the owner approved on 2026-10-29, kept here so it travels with the code. The product
 > brief and decisions are in [`SPEC.md`](SPEC.md). Keep the phase status table up to date.
 >
-> **Status (2026-10-30): all seven phases done, plus phase 8 (profile photos, D8 in SPEC.md),
-> asked for once real friends were on the phone — schema v2, auto-migrated; the phone's data was
-> backed up and the upgrade dry-run on the emulator against a copy of it first.**
+> **Status (2026-10-30): all seven phases done, plus two later requests once real friends were
+> on the phone: phase 8 (profile photos, D8 in SPEC.md — schema v2, auto-migrated) and phase 9
+> (WhatsApp calls, D9 — no schema change).**
 > Not exercised on a device: the Android 17 system-picker branch (the phone is API 36), a real
-> direct `ACTION_CALL` (testing only ever used the dialer), and midnight rollover / missed days
-> by changing the phone's date (covered by unit tests and `TodayClock` instead).
+> direct `ACTION_CALL` (testing only ever used the dialer), a real WhatsApp call (WhatsApp's
+> intents were only resolved on the phone, not started), and midnight rollover / missed days by
+> changing the phone's date (covered by unit tests and `TodayClock` instead).
 
 ## Context
 
@@ -303,6 +304,7 @@ Each phase ends with a building app, a test run, a report and a local commit. "C
 | 6 | **Statistics** | The pure `CallStats` calculator (streaks, month, tops) with tests, and the Statistics screen. | ✅ |
 | 7 | **Settings & polish** | Call-directly switch, permission statuses, **Shuffle again**, empty states, a check of every theme, lint, a long-name and font-scale pass, and a full pass on the device. | ✅ |
 | 8 | **Profile photos** (later request, D8) | Schema v2 (`friends.photo`, auto-migration 1→2, migration test). Photos copied into `files/photos` (`photos/FriendPhotos`); choosing via the system photo picker + a framing step; contact photos carried over by the importer and by Settings › *Photos from contacts*; avatars on every friend card and list. | ✅ |
+| 9 | **WhatsApp calls** (later request, D9) | A friend's page: WhatsApp (left) and Call (right) side by side; a WhatsApp call counts like a phone call. `Caller.callOnWhatsApp`: WhatsApp's phonebook "Voice call" entry for the number (`whatsAppCallFor`, pure), else the WhatsApp chat. Manifest: `<queries>` for `com.whatsapp`. WhatsApp glyph from Simple Icons (CC0). | ✅ |
 
 ---
 

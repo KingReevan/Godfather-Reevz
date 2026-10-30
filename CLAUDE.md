@@ -59,13 +59,16 @@ Instrumented tests (`connectedDebugAndroidTest`):
   runs the auto-migration and checks the result). Add one of these for every new schema version.
 - `FriendPhotosTest` — opening (EXIF rotation, size cap), saving, contact-photo copies, decode
   sizes and the sweep, on a real device's decoders.
+- `WhatsAppLookupTest` — finding WhatsApp's voice-call entry through the real contacts provider:
+  makes a contact, then deletes it, with the shell's contacts permissions borrowed for the test
+  (the app's own are never granted — that would change `AppFlowsTest`'s photo flows).
 - `AppFlowsTest` — end-to-end flows through the real Activity and **the real database and photos
   folder, which it wipes before every test**: empty Home → first friend, call / redial / undo,
   off-schedule call, duplicate number, edit + discard guard, remove + stats, shuffle confirm,
   theme + restart, header buttons, photo choose + frame + remove, add with a photo, edit's photo
-  + discard guard. Calls go to `FakeCaller` and photo picks to `FakePhotoPicker` (set on
-  `GodfatherApplication.caller` / `.photoPicker` before the Activity starts) — nobody is dialled,
-  no gallery is opened. Add a flow here when adding or changing a user-facing flow. Compose's
+  + discard guard, WhatsApp call (+ chat fallback, + not installed). Calls — phone and WhatsApp —
+  go to `FakeCaller` and photo picks to `FakePhotoPicker` (set on `GodfatherApplication.caller` /
+  `.photoPicker` before the Activity starts) — nobody is dialled, no gallery is opened. Add a flow here when adding or changing a user-facing flow. Compose's
   test clock drives coroutine delays: use `mainClock.advanceTimeBy`, not `Thread.sleep`.
 
 **Real friends are on the phone: run instrumented tests on the emulator**
@@ -141,13 +144,14 @@ adb lives in `%LOCALAPPDATA%\Android\Sdk\platform-tools` (not on PATH). The phon
 
 ## Current project state
 
-All eight phases of `docs/PLAN.md` are done (8 = profile photos, a later request: D8 in
-`docs/SPEC.md`). **The owner has used the app for real since 2026-10-30** (32 friends, 20 with
+All nine phases of `docs/PLAN.md` are done (8 = profile photos, 9 = WhatsApp calls — later
+requests: D8 and D9 in `docs/SPEC.md`). **The owner has used the app for real since 2026-10-30** (32 friends, 20 with
 contact photos): the schema (now v2) is frozen — changes only by a new version + migration — and
 nothing that wipes or uninstalls the app may touch the phone (see "Build and verify").
 
 Not exercised on a device: the Android 17 picker branch (phone is API 36), a real direct
-`ACTION_CALL`, and midnight rollover by changing the phone's date.
+`ACTION_CALL`, a real WhatsApp call (its intents were resolved on the phone, not started), and
+midnight rollover by changing the phone's date.
 
 - `data/` — Room schema v2: `friends` (position/turnUsed rotation columns, notes, `photo` — added
   in v2 by `AutoMigration(1, 2)`), `calls` (one row per friend per day pressed; `scheduled`,
@@ -207,10 +211,12 @@ Not exercised on a device: the Android 17 picker branch (phone is API 36), a rea
   the friend in focus changes.
 - `ui/details/` — friend page: photo (`EditablePhoto`; a change saves at once and deletes the old
   file), facts, notes (debounced 600ms + saved on leaving, via appScope),
-  "Called today ✓ · Undo" (confirm dialog), Call button. Call = `recordCall()` first (idempotent
-  per friend per day), then `LocalCaller` places it: `ACTION_CALL` if "Call directly" and
-  CALL_PHONE granted, else asks for the permission once and falls back to `ACTION_DIAL`. A 1.5s
-  cool-down stops double taps. `TodayRole` (TO_CALL / CALLED / OTHER) drives the chip and the
+  "Called today ✓ · Undo" (confirm dialog), and side by side WhatsApp (left) and Call (right)
+  (D9). Either = `recordCall()` first (idempotent per friend per day), then `LocalCaller` places
+  it. Call: `ACTION_CALL` if "Call directly" and CALL_PHONE granted, else asks for the
+  permission once and falls back to `ACTION_DIAL`. WhatsApp: checked installed first (else
+  nothing is recorded), then `callOnWhatsApp`. A 1.5s cool-down, shared by both, stops double
+  taps. `TodayRole` (TO_CALL / CALLED / OTHER) drives the chip and the
   "not today's call" hint.
 - `util/Search.matchesSearch` — the one search rule (name ignoring case/accents, or 3+ digits of a
   number) for the importer, Edit and Remove. `ui/common/FriendList` — `FriendSearchField`,
@@ -229,8 +235,13 @@ Not exercised on a device: the Android 17 picker branch (phone is API 36), a rea
   are neutral, not missed), "Longest since a call" (top 3), calls per month for six months.
   **No per-friend call counts** — they would reveal pass boundaries.
 - `util/Caller` — interface + `AndroidCaller`, provided through `LocalCaller` so UI tests can use a
-  fake that never dials. **Never place a real call while testing**: deny the phone permission or
-  turn "Call directly" off, and back out of the dialer.
+  fake that never dials. **Never place a real call while testing** — WhatsApp calls included:
+  deny the phone permission or turn "Call directly" off, and back out of the dialer. WhatsApp has
+  no public call intent: `callOnWhatsApp` views WhatsApp's phonebook "Voice call" data row
+  (`ACTION_VIEW`, type `WHATSAPP_VOICE_CALL`, package `com.whatsapp` — what the Contacts app
+  does), else opens `https://wa.me/<international number>` (the chat; `PhoneNumberUtils` adds
+  the country code) and returns `WhatsAppResult` so the page can say which. The manifest's
+  `<queries>` lists `com.whatsapp` so `hasWhatsApp` can see it.
 - `ui/common/AppMessages` (`LocalAppMessages`) — the app-wide snackbar, owned by the shell so a
   message survives the screen closing; lifted 76dp so it never covers a bottom action button.
 - `ui/common/Submission` — as in Habitz, plus `repeatable = true` for screens that stay open after
@@ -246,7 +257,9 @@ Not exercised on a device: the Android 17 picker branch (phone is API 36), a rea
   contact, same-number duplicates merged, default number first, locale A–Z), the system picker
   intent (API 37+: `ContactsPickerSessionContract.ACTION_PICK_CONTACTS` multi-select; older:
   `ACTION_PICK` on phone numbers) and reading its result URI. Contacts carry their `photo`
-  (PHOTO_URI) and `thumbnail`; `contactPhotoFor` (pure) finds a number's contact photo. The
+  (PHOTO_URI) and `thumbnail`; `contactPhotoFor` (pure) finds a number's contact photo;
+  `whatsAppCallFor` (pure) finds WhatsApp's voice-call row for a number — by the WhatsApp number
+  in the row ("919876543210@s.whatsapp.net"), else on a contact with that number. The
   classic system picker asks for the photo too, but without contacts access it usually can't be
   read, so those friends come in without one.
 - `ui/contactpicker/` — the importer: permission prompt (explanation → request; refused twice →
@@ -256,7 +269,8 @@ Not exercised on a device: the Android 17 picker branch (phone is API 36), a rea
   been run on a device (the phone is API 36).
 
 Generated assets — edit the script, not the output (licences in `docs/THIRD_PARTY.md`):
-- `tools/fetch_icons.py` → `res/drawable/ic_*.xml` (Material Symbols Rounded, Apache 2.0).
+- `tools/fetch_icons.py` → `res/drawable/ic_*.xml` (Material Symbols Rounded, Apache 2.0; the
+  WhatsApp glyph from Simple Icons, CC0, pinned version).
 - `tools/fetch_fonts.py` → `res/font/*.ttf` (SIL OFL).
 - `tools/make_icon.py [preview.png]` → the adaptive launcher icon layers (`mipmap-anydpi`, no
   bitmaps — minSdk 26): the Don in a tuxedo with a red rose, on a coral→sunflower sunset. The

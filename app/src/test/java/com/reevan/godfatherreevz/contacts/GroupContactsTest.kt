@@ -82,4 +82,47 @@ class GroupContactsTest {
         assertEquals(null, contactPhotoFor("98765 43210", contacts))
         assertEquals(null, contactPhotoFor("90000 00000", contacts))
     }
+
+    private fun number(id: Long, contact: Long, number: String) = DataRow(id, contact, PHONE, number)
+    private fun whatsApp(id: Long, contact: Long, jid: String) = DataRow(id, contact, WHATSAPP_VOICE_CALL, jid)
+
+    @Test
+    fun `a friend's WhatsApp call is found by its WhatsApp number, however theirs is written`() {
+        val rows = listOf(
+            number(1, contact = 10, "+91 98765 43210"),
+            whatsApp(2, contact = 10, "919876543210@s.whatsapp.net"),
+            number(3, contact = 20, "098200 11122"),
+            whatsApp(4, contact = 20, "919820011122@s.whatsapp.net"),
+        )
+        assertEquals(2L, whatsAppCallFor("98765 43210", rows))
+        assertEquals(4L, whatsAppCallFor("+91 98200 11122", rows))
+    }
+
+    @Test
+    fun `without a matching WhatsApp number, the call on the contact with the friend's number`() {
+        // WhatsApp's entry doesn't spell out the number (a format it may change to).
+        val rows = listOf(
+            number(1, contact = 10, "+91 98765 43210"),
+            whatsApp(2, contact = 10, "abc123@lid"),
+            whatsApp(3, contact = 30, "xyz789@lid"),
+        )
+        assertEquals(2L, whatsAppCallFor("98765 43210", rows))
+    }
+
+    @Test
+    fun `no WhatsApp call when the number isn't on WhatsApp or in the phonebook`() {
+        val rows = listOf(
+            number(1, contact = 10, "+91 98765 43210"), // in the phonebook, not on WhatsApp
+            number(3, contact = 20, "98200 11122"),
+            whatsApp(4, contact = 20, "919820011122@s.whatsapp.net"),
+        )
+        assertEquals(null, whatsAppCallFor("98765 43210", rows))
+        assertEquals(null, whatsAppCallFor("90000 00000", rows))
+        assertEquals(null, whatsAppCallFor("98765 43210", emptyList()))
+    }
+
+    private companion object {
+        /** `Phone.CONTENT_ITEM_TYPE`. */
+        const val PHONE = "vnd.android.cursor.item/phone_v2"
+    }
 }

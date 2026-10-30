@@ -9,8 +9,11 @@ The `android:tint="?attr/colorControlNormal"` attribute is stripped: Compose's I
 own tint, and a theme-attribute reference would resolve against the Activity's XML theme instead
 of the app's Compose theme.
 
-Material Symbols are licensed under Apache 2.0 (see docs/THIRD_PARTY.md). Same approach as
-Reevz Habitz's tools/fetch_habit_icons.py. Pure stdlib.
+Brand glyphs (the WhatsApp button's) come from Simple Icons, pinned to one version: a single
+24x24 path, drawn a little inside its box so it sits the same size as the Material Symbols.
+
+Material Symbols are licensed under Apache 2.0, Simple Icons under CC0 (see docs/THIRD_PARTY.md).
+Same approach as Reevz Habitz's tools/fetch_habit_icons.py. Pure stdlib.
 """
 import os
 import re
@@ -44,6 +47,28 @@ ICONS = [
     ("delete", "delete", True),
 ]
 
+SIMPLE_ICONS = "https://cdn.jsdelivr.net/npm/simple-icons@16.36.0/icons"
+
+# (key, Simple Icons slug)
+BRANDS = [
+    ("whatsapp", "whatsapp"),
+]
+
+BRAND_XML = """<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="28"
+    android:viewportHeight="28">
+  <group
+      android:translateX="2"
+      android:translateY="2">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="{path}"/>
+  </group>
+</vector>
+"""
+
 
 def fetch(url):
     try:
@@ -56,7 +81,7 @@ def fetch(url):
 
 
 def main():
-    keys = [key for key, _, _ in ICONS]
+    keys = [key for key, _, _ in ICONS] + [key for key, _ in BRANDS]
     if len(keys) != len(set(keys)):
         sys.exit("Duplicate keys in ICONS")
 
@@ -74,7 +99,16 @@ def main():
         with open(os.path.join(RES, f"ic_{key}.xml"), "w", encoding="utf-8", newline="\n") as out:
             out.write(xml)
 
-    print(f"Wrote {len(ICONS) - len(missing)} icons to {os.path.normpath(RES)}")
+    for key, slug in BRANDS:
+        svg = fetch(f"{SIMPLE_ICONS}/{slug}.svg")
+        paths = re.findall(r'<path d="([^"]+)"', svg or "")
+        if len(paths) != 1 or 'viewBox="0 0 24 24"' not in svg:
+            missing.append(f"{key} ({slug})")
+            continue
+        with open(os.path.join(RES, f"ic_{key}.xml"), "w", encoding="utf-8", newline="\n") as out:
+            out.write(BRAND_XML.format(path=paths[0]))
+
+    print(f"Wrote {len(ICONS) + len(BRANDS) - len(missing)} icons to {os.path.normpath(RES)}")
     if missing:
         sys.exit("Not found: " + ", ".join(missing))
 

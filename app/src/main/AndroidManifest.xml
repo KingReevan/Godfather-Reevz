@@ -17,7 +17,10 @@
         android:name="android.hardware.telephony"
         android:required="false" />
 
-    <!-- Package visibility: lets the app check a phone app exists before recording a call. -->
+    <!--
+        Package visibility: lets the app check a phone app exists, and that WhatsApp is installed,
+        before recording a call.
+    -->
     <queries>
         <intent>
             <action android:name="android.intent.action.DIAL" />
@@ -27,6 +30,7 @@
             <action android:name="android.intent.action.CALL" />
             <data android:scheme="tel" />
         </intent>
+        <package android:name="com.whatsapp" />
     </queries>
 
     <!--

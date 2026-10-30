@@ -46,6 +46,7 @@ App Icon: Something resembling Don Coreleone. The Godfather. A man in a tuxed/su
 | D6 | Menu | **Full-screen Menu page** with four big buttons. |
 | D7 | Themes | **Fixed themes**, each one complete look (light or dark), chosen in Settings. No "follow system". |
 | D8 | Profile photos (asked for 2026-10-30, after real use began) | **Each friend can have a photo**, chosen by the owner; friends added from contacts bring their contact photo. See "Later requests". |
+| D9 | WhatsApp calls (asked for 2026-10-30) | **A friend's page has two call buttons side by side: WhatsApp (left) and Call (right).** Either one counts the call. See "Later requests". |
 
 ### Defaults chosen during planning (the owner approved the plan containing them)
 - **Adding friends:** an in-app contact importer (asks for contacts permission once; searchable,
@@ -80,3 +81,23 @@ How it works (defaults chosen while building it):
   original or the contact changes, and — like everything else — never leaves the phone.
 - Photos show wherever a friend does: Home's cards, their page, the Edit/Remove lists; the
   importer shows contacts' photos. A friend without one shows their initials.
+
+### 2026-10-30 — WhatsApp calls (D9)
+The owner, verbatim: "I want to be able to choose between making a regular call or making a
+whatsapp call. When I click a card, the details page will open. In that page, put the whatsapp
+call button as well. Let both normal call and whatsapp call buttons be in one horizontal line.
+Whatsapp call should be the left button and normal call should be the right button."
+
+How it works (defaults chosen while building it):
+- **The buttons:** at the bottom of a friend's page, *WhatsApp* (left) and *Call* (right), the
+  same size. The labels are short so both fit side by side; the friend's name is at the top of
+  the page, and "Called today ✓" shows when today's call is made.
+- **Counting:** a WhatsApp call counts exactly like a phone call — today's call, or that friend's
+  turn (D3), recorded once per friend per day; pressing either again the same day only calls
+  again. Undo works the same. Calls don't record which way they were made.
+- **Calling:** WhatsApp has no public "call this number" command, so the app does what the
+  Contacts app does: it opens the "Voice call" entry WhatsApp adds to each phonebook contact on
+  WhatsApp (found by number, with contacts access), and WhatsApp starts the call. If there's no
+  such entry (the number isn't saved in the phonebook, isn't on WhatsApp, or contacts access is
+  off), it opens the friend's WhatsApp chat instead and says so — WhatsApp's call button is one
+  tap away there. Without WhatsApp installed it says so and counts nothing.

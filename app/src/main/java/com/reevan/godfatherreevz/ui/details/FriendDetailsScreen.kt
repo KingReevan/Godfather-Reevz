@@ -1,6 +1,7 @@
 package com.reevan.godfatherreevz.ui.details
 
 import android.Manifest
+import androidx.annotation.DrawableRes
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -50,6 +52,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -60,22 +63,28 @@ import com.reevan.godfatherreevz.ui.photo.EditablePhoto
 import com.reevan.godfatherreevz.ui.settings.PreferencesViewModel
 import com.reevan.godfatherreevz.ui.theme.GodfatherTheme
 import com.reevan.godfatherreevz.util.LocalCaller
+import com.reevan.godfatherreevz.util.WhatsAppResult
 import com.reevan.godfatherreevz.util.formatCallDate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
 
 /** Test tag on the Call button. */
 const val CALL_BUTTON_TAG = "call-button"
 
+/** Test tag on the WhatsApp button. */
+const val WHATSAPP_BUTTON_TAG = "whatsapp-button"
+
 /**
  * A friend's page: their photo (tap to change it), who they are, when they were last called,
- * conversation notes (D4), and the Call button at the bottom — the only thing that counts a call
- * (the brief).
+ * conversation notes (D4), and at the bottom WhatsApp (left) and Call (right) — the only things
+ * that count a call (the brief; D9).
  *
- * Pressing Call records the call first (on the app-wide scope, so it lands even if the app is put
- * away for the call), then places it: straight away with the phone permission and "Call
- * directly" on, otherwise through the dialer. A second press the same day only redials.
+ * Either button records the call first (on the app-wide scope, so it lands even if the app is put
+ * away for the call), then places it. Call: straight away with the phone permission and "Call
+ * directly" on, otherwise through the dialer. WhatsApp: a WhatsApp voice call, or their WhatsApp
+ * chat when the voice call can't be found. A second press the same day only calls again.
  */
 @Composable
 fun FriendDetailsScreen(
@@ -94,6 +103,7 @@ fun FriendDetailsScreen(
     val context = LocalContext.current
     val caller = LocalCaller.current
     val messages = LocalAppMessages.current
+    val scope = rememberCoroutineScope()
 
     // The number waiting for the phone-permission answer; refused, the dialer opens instead.
     var pendingNumber by rememberSaveable { mutableStateOf<String?>(null) }
@@ -123,6 +133,22 @@ fun FriendDetailsScreen(
                     messages.show("Couldn't open the phone app")
                 }
             },
+            onWhatsApp = {
+                if (!caller.hasWhatsApp(context)) {
+                    messages.show("WhatsApp isn't installed")
+                    return@DetailsContent
+                }
+                if (!current.calledToday) viewModel.recordCall()
+                scope.launch {
+                    when (caller.callOnWhatsApp(context, current.friend.phone)) {
+                        WhatsAppResult.CALLING -> Unit
+                        WhatsAppResult.CHAT -> messages.show("Opened the chat: tap WhatsApp's call button")
+                        WhatsAppResult.CHAT_NO_CONTACTS ->
+                            messages.show("Opened the chat. Allow contacts in Settings to call in one tap")
+                        WhatsAppResult.FAILED -> messages.show("Couldn't open WhatsApp")
+                    }
+                }
+            },
             onUndo = {
                 viewModel.undoCall { undone ->
                     messages.show(if (undone) "Call undone" else "Nothing to undo")
@@ -139,6 +165,7 @@ fun FriendDetailsScreen(
 private fun DetailsContent(
     state: DetailsState.Loaded,
     onCall: () -> Unit,
+    onWhatsApp: () -> Unit,
     onUndo: () -> Unit,
     onNotesChanged: (String) -> Unit,
     onPhotoChanged: (String?) -> Unit,
@@ -163,7 +190,7 @@ private fun DetailsContent(
     }
 
     var confirmingUndo by rememberSaveable { mutableStateOf(false) }
-    // A short pause after each press, so a double tap can't open the dialer twice.
+    // A short pause after each press (of either button), so a double tap can't call twice.
     var cooling by remember { mutableStateOf(false) }
     LaunchedEffect(cooling) {
         if (cooling) {
@@ -171,7 +198,13 @@ private fun DetailsContent(
             cooling = false
         }
     }
-    val firstName = friend.name.substringBefore(' ')
+    val press = { action: () -> Unit ->
+        if (!cooling) {
+            cooling = true
+            haptics.performHapticFeedback(HapticFeedbackType.Confirm)
+            action()
+        }
+    }
 
     Column(modifier.fillMaxSize().imePadding()) {
         Column(
@@ -279,29 +312,26 @@ private fun DetailsContent(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Button(
-                onClick = {
-                    if (cooling) return@Button
-                    cooling = true
-                    haptics.performHapticFeedback(HapticFeedbackType.Confirm)
-                    onCall()
-                },
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 60.dp)
-                    .testTag(CALL_BUTTON_TAG),
-            ) {
-                Icon(painterResource(R.drawable.ic_call), contentDescription = null, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = if (state.calledToday) "Call again" else "Call $firstName",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                CallButton(
+                    text = "WhatsApp",
+                    icon = R.drawable.ic_whatsapp,
+                    onClick = { press(onWhatsApp) },
+                    container = MaterialTheme.colorScheme.secondaryContainer,
+                    content = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(WHATSAPP_BUTTON_TAG),
+                )
+                CallButton(
+                    text = "Call",
+                    icon = R.drawable.ic_call,
+                    onClick = { press(onCall) },
+                    container = MaterialTheme.colorScheme.primary,
+                    content = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag(CALL_BUTTON_TAG),
                 )
             }
         }
@@ -329,6 +359,28 @@ private fun DetailsContent(
 
 /** Test tag on the notes field. */
 const val NOTES_TAG = "notes"
+
+/** One of the two buttons at the bottom of the page, side by side. */
+@Composable
+private fun CallButton(
+    text: String,
+    @DrawableRes icon: Int,
+    onClick: () -> Unit,
+    container: Color,
+    content: Color,
+    modifier: Modifier = Modifier,
+) {
+    Button(
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = content),
+        modifier = modifier.heightIn(min = 60.dp),
+    ) {
+        Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(text = text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    }
+}
 
 @Composable
 private fun RoleChip(state: DetailsState.Loaded) {
