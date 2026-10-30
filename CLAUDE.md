@@ -119,8 +119,8 @@ adb lives in `%LOCALAPPDATA%\Android\Sdk\platform-tools` (not on PATH).
 
 ## Current project state
 
-Phases 1–4 of `docs/PLAN.md` are done (foundations, look & feel, Add Friend, Home + details +
-Call); later phases fill in the placeholder screens (`ui/common/ComingSoon`).
+Phases 1–5 of `docs/PLAN.md` are done (foundations, look & feel, Add Friend, Home + details +
+Call, Edit & Remove); later phases fill in the placeholder screens (`ui/common/ComingSoon`).
 
 - `data/` — Room schema v1: `friends` (position/turnUsed rotation columns, notes), `calls` (one row
   per friend per day pressed; `scheduled`, `consumedTurn`; FK `SET NULL` on removal),
@@ -161,6 +161,16 @@ Call); later phases fill in the placeholder screens (`ui/common/ComingSoon`).
   CALL_PHONE granted, else asks for the permission once and falls back to `ACTION_DIAL`. A 1.5s
   cool-down stops double taps. `TodayRole` (TO_CALL / CALLED / OTHER) drives the chip and the
   "not today's call" hint.
+- `util/Search.matchesSearch` — the one search rule (name ignoring case/accents, or 3+ digits of a
+  number) for the importer, Edit and Remove. `ui/common/FriendList` — `FriendSearchField`,
+  `FriendRow`, `filterFriends`, `ListMessage`.
+- `ui/editfriend/` — Edit Friend: A–Z searchable list → editor (`key`ed by friend id) for name and
+  phone only; Save enabled only for a real, valid change (`FriendDraft.changes`, compared as
+  saved); leaving with changes goes through `LeaveGuard` → "Discard changes?" → lands exactly
+  where the owner was heading. Saving is an in-place UPDATE: rotation place, calls, notes untouched.
+- `ui/removefriend/` — Remove Friend: A–Z searchable, whole row toggles the checkbox, red
+  "Remove (n)" → confirm ("Their notes go with them. Past calls stay in Statistics.") → back to
+  Menu. Calls keep the friend's name snapshot (FK `SET NULL`).
 - `util/Caller` — interface + `AndroidCaller`, provided through `LocalCaller` so UI tests can use a
   fake that never dials. **Never place a real call while testing**: deny the phone permission or
   turn "Call directly" off, and back out of the dialer.

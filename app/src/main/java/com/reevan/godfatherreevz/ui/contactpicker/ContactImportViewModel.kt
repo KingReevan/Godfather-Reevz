@@ -9,13 +9,14 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.reevan.godfatherreevz.contacts.PhoneContact
 import com.reevan.godfatherreevz.contacts.PhoneContacts
+import com.reevan.godfatherreevz.util.folded
+import com.reevan.godfatherreevz.util.matchesSearch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.text.Normalizer
 
 /** The phonebook as the contact importer shows it. */
 sealed interface ContactsState {
@@ -54,24 +55,9 @@ class ContactImportViewModel(private val application: Application) : ViewModel()
     }
 }
 
-/** Lower-cased with accents removed: "Émile" matches "emile". */
-private fun String.folded(): String =
-    Normalizer.normalize(lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
-
-/**
- * Contacts matching the search [query]: by any part of the name (ignoring case and accents), or —
- * when the query has three or more digits — by number.
- */
-fun filterContacts(contacts: List<PhoneContact>, query: String): List<PhoneContact> {
-    val text = query.trim()
-    if (text.isEmpty()) return contacts
-    val needle = text.folded()
-    val digits = text.filter(Char::isDigit)
-    return contacts.filter { contact ->
-        contact.name.folded().contains(needle) ||
-            (digits.length >= 3 && contact.numbers.any { it.number.filter(Char::isDigit).contains(digits) })
-    }
-}
+/** Contacts matching the search [query] (see [matchesSearch]). */
+fun filterContacts(contacts: List<PhoneContact>, query: String): List<PhoneContact> =
+    contacts.filter { contact -> matchesSearch(contact.name, contact.numbers.map { it.number }, query) }
 
 /** The letter a contact is filed under in the list: "Émile" → 'E'; digits and symbols → '#'. */
 fun sectionOf(name: String): Char {

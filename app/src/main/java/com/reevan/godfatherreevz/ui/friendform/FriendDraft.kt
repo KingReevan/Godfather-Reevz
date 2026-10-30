@@ -18,6 +18,13 @@ data class FriendDraft(val name: String, val phone: String) {
     )
 
     /**
+     * Whether saving this over [original] would change anything, compared as saved (so adding a
+     * trailing space, or lower-casing a letter the save capitalises anyway, is no change).
+     */
+    fun changes(original: Friend): Boolean =
+        toNewFriend().let { it.name != original.name || it.phone != original.phone }
+
+    /**
      * Whether this can be saved, and what to tell the user. [existing] are the friends already
      * saved; [exceptId] is the friend being edited, who may of course keep their own number.
      *

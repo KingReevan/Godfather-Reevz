@@ -30,6 +30,8 @@ import com.reevan.godfatherreevz.ui.common.HomeHeader
 import com.reevan.godfatherreevz.ui.common.LocalAppMessages
 import com.reevan.godfatherreevz.ui.contactpicker.ContactImportScreen
 import com.reevan.godfatherreevz.ui.details.FriendDetailsScreen
+import com.reevan.godfatherreevz.ui.editfriend.EditFriendListScreen
+import com.reevan.godfatherreevz.ui.editfriend.EditFriendScreen
 import com.reevan.godfatherreevz.ui.home.HomeScreen
 import com.reevan.godfatherreevz.ui.home.HomeScroll
 import com.reevan.godfatherreevz.ui.home.HomeViewModel
@@ -44,6 +46,7 @@ import com.reevan.godfatherreevz.ui.navigation.pop
 import com.reevan.godfatherreevz.ui.navigation.popIfCurrent
 import com.reevan.godfatherreevz.ui.navigation.popTo
 import com.reevan.godfatherreevz.ui.navigation.pushFrom
+import com.reevan.godfatherreevz.ui.removefriend.RemoveFriendScreen
 import com.reevan.godfatherreevz.ui.settings.SettingsScreen
 import com.reevan.godfatherreevz.util.TodayClock
 import com.reevan.godfatherreevz.util.formatHeaderDate
@@ -76,6 +79,7 @@ fun GodfatherApp() {
     val leaveTo: (List<Destination>) -> Unit = { target ->
         if (target != backStack && !leaveGuard.intercepts(target)) backStack = target
     }
+    val commitLeave: (List<Destination>) -> Unit = { backStack = it }
 
     // A screen finishing its own job goes back to where it came from — but only if it is still on
     // top, so a breadcrumb tapped while it saved is never overruled.
@@ -145,14 +149,24 @@ fun GodfatherApp() {
                         if (backStack.lastOrNull() == Destination.ContactImport) backStack = InitialBackStack
                     },
                 )
-                Destination.EditFriendList -> ComingSoon("Edit Friend", phase = 5)
-                Destination.RemoveFriend -> ComingSoon("Remove Friend", phase = 5)
+                Destination.EditFriendList -> EditFriendListScreen(
+                    onOpen = { navigate(Destination.EditFriend(it)) },
+                )
+                // Keyed by friend, so one friend's unsaved edits can never carry into another's.
+                is Destination.EditFriend -> key(current.friendId) {
+                    EditFriendScreen(
+                        friendId = current.friendId,
+                        leaveGuard = leaveGuard,
+                        onLeave = commitLeave,
+                        onDone = finish(current),
+                    )
+                }
+                Destination.RemoveFriend -> RemoveFriendScreen(onRemoved = finish(Destination.RemoveFriend))
                 Destination.Statistics -> ComingSoon("Statistics", phase = 6)
                 // Keyed by friend, so one friend's page state can never carry into another's.
                 is Destination.FriendDetails -> key(current.friendId) {
                     FriendDetailsScreen(friendId = current.friendId, onGone = finish(current))
                 }
-                is Destination.EditFriend -> ComingSoon("Edit", phase = 5)
             }
         }
     }
