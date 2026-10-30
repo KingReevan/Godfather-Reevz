@@ -1,0 +1,140 @@
+# Godfather Reevz
+
+## What this project is
+
+Godfather Reevz is a **personal Android app** for my own phone: it tells me which friend to call
+today (one a day, in a shuffled rotation) so I keep in touch with everyone.
+
+**The product spec is [`docs/SPEC.md`](docs/SPEC.md) — read it before working on any feature.** It
+is the source of truth for screens and behaviour (my brief verbatim, plus decisions D1–D7). Do
+not invent features beyond it; where it is silent or ambiguous, ask. The approved plan, data
+model and phase status are in [`docs/PLAN.md`](docs/PLAN.md); keep its status table up to date.
+
+It is a personal app — not a multi-user SaaS product. Its siblings, Reevz Habitz (`..\ReevzHabitz`,
+the closest reference), Reevz Drip and Reevz Mealz, use the same stack and conventions.
+
+## Stack
+
+- Kotlin + Jetpack Compose, Material 3
+- Room for local persistence (KSP for its code generation)
+- MVVM: `ViewModel` + `StateFlow`, each ViewModel exposing a `Factory` built with
+  `viewModelFactory { initializer { ... } }`. No DI framework — DAOs come from
+  `GodfatherDatabase.getInstance(application)`.
+- Android-first, local-first / offline-first
+
+## Core principles
+
+- Keep the app simple and fast to use.
+- **Do not introduce a backend, authentication, cloud database, analytics, or AI** unless I
+  explicitly ask for it.
+- Prefer local storage and offline functionality; prefer Android/Jetpack libraries.
+- Keep the architecture understandable rather than over-engineered. Solve the problem in front of
+  you, not hypothetical future ones.
+
+## Working rules
+
+- Make small, focused changes. Do not modify unrelated files.
+- Preserve existing functionality when implementing new features.
+- **Before making an architectural change, explain the reason first.**
+- **Before adding a dependency, explain why it is needed.**
+- Run the appropriate build/tests after significant changes.
+- **Never claim a feature works without verifying it.** If verification did not run, or failed, say
+  so plainly and show the output.
+- Do not silently change project-wide configuration (Gradle files, version catalog,
+  `gradle.properties`, manifest, theme). If a config change is genuinely required, call it out.
+
+## Build and verify
+
+Windows / PowerShell:
+
+```
+.\gradlew.bat assembleDebug          # compile the app
+.\gradlew.bat testDebugUnitTest      # host unit tests
+.\gradlew.bat lint                   # Android lint
+```
+
+Instrumented tests (`connectedDebugAndroidTest`):
+- `GodfatherDatabaseTest` — the rotation transactions against in-memory Room.
+
+**`connectedAndroidTest` uninstalls the app when it finishes, which deletes the database.** Once I
+use the app for real, back up the phone's database first
+(`adb exec-out run-as com.reevan.godfatherreevz cat databases/godfather-reevz.db`) and restore it
+after — or run them on an emulator (`ANDROID_SERIAL=emulator-5554`).
+
+Target phone: **Nothing Phone (2a), Android 16 (API 36)**, adb serial `00050146M001006`. Update it
+with `adb -s 00050146M001006 install -r app/build/outputs/apk/debug/app-debug.apk` (keeps data).
+adb lives in `%LOCALAPPDATA%\Android\Sdk\platform-tools` (not on PATH).
+
+## Git
+
+- Local repository; one commit per finished phase. **Never push** unless explicitly asked.
+- Do not commit generated build artifacts, `local.properties`, IDE-specific files, or secrets.
+
+## UI guidelines
+
+- Design for a **phone**, one-handed: common actions reachable with a thumb.
+- Every screen's header has the Settings and Menu buttons on the right (the brief).
+- Use colour *roles* from `MaterialTheme.colorScheme`, or `GodfatherTheme.colors` for the few
+  app-only colours — never hardcoded colours. Names and headings use `GodfatherTheme.displayFont`.
+- Accessible touch targets (48dp minimum); minimum (not fixed) heights so big fonts don't clip.
+- Navigation is the hand-rolled back stack in `ui/navigation/` (as in Habitz), not a library.
+
+## Data guidelines
+
+- Data is stored **locally** in Room (`godfather-reevz.db`). **No backups**, by my choice:
+  `allowBackup="false"` and the backup/extraction rules exclude everything.
+- Once real data is on the phone, schema changes **must** use proper Room migrations
+  (`@AutoMigration` where additive). Never `fallbackToDestructiveMigration`. Room schemas are
+  exported to `app/schemas/` and committed.
+- **Never write `friends` with REPLACE.** SQLite does it as delete + insert, and the delete sets
+  every one of that friend's calls' `friendId` to null. Edits are targeted `UPDATE`s.
+- Do not delete or reset user data as part of a normal feature. Call history and notes are not
+  recoverable.
+
+## The rotation (read before touching scheduling)
+
+- **All scheduling rules live in the pure `rotation/Rotation.kt`**, pinned by `RotationTest`
+  (unit tests + long random simulations of the owner's rules). Change rules there, not in DAOs or
+  UI. `FriendDao`'s `@Transaction` methods read the order, apply one rule, save changed rows.
+- Model: `friends.position` (0 = head = today's friend while today's call isn't made) and
+  `friends.turnUsed`. Every waiting friend precedes every used one; when nobody is left waiting
+  everyone becomes waiting again **without reordering** — the pass boundary must stay invisible
+  (spec: "I won't be able to tell when the repetition starts … it should stay this way"). So: no
+  round numbers, no per-friend call counts, no "reset" moments anywhere in the UI.
+- "Today's call is done" = a `scheduled` call dated within `TodayWindow` (today..today+2). Work it
+  out inside the transaction from `today`, never from what a screen showed.
+- `util/TodayClock` is the single source of "today". Never call `LocalDate.now()` elsewhere.
+
+## Toolchain notes (non-obvious — read before touching Gradle)
+
+- **AGP 9.3.3**, Gradle 9.5.0, Kotlin 2.2.10, Compose BOM 2026.02.01, Room 2.8.4, KSP
+  2.2.10-2.0.2. Gradle daemon toolchain is Java 25 (`gradle/gradle-daemon-jvm.properties`).
+- **There is no `org.jetbrains.kotlin.android` plugin.** AGP 9 compiles Kotlin itself.
+- `minSdk` is 26 so `java.time` is available without desugaring.
+- `compileSdk { version = release(37) }`; release `optimization { enable = false }` (R8 off).
+- Gradle **configuration cache is enabled**.
+- All dependencies and versions go through `gradle/libs.versions.toml`.
+- **`android.disallowKotlinSourceSets=false` in `gradle.properties` is load-bearing** (KSP).
+- `compileOptions` targets Java 17; no `jvmTarget` / `jvmToolchain` block is needed.
+
+## Current project state
+
+Phase 1 of `docs/PLAN.md` is done (foundations); later phases fill in the placeholder screens.
+
+- `data/` — Room schema v1: `friends` (position/turnUsed rotation columns, notes), `calls` (one row
+  per friend per day pressed; `scheduled`, `consumedTurn`; FK `SET NULL` on removal),
+  `app_settings` (theme, callDirectly). `FriendDao` holds every rotation transaction; `CallDao` is
+  read-only views. Dates are `LocalDate` stored as epoch days.
+- `rotation/Rotation.kt` + `RotationTest` — see "The rotation" above.
+- `util/` — `TodayClock` + `clockChanges` (from Habitz), `Dates` (`formatCallDate` = dd-mm-yyyy,
+  `formatLastCalled` = "-" when never), `TextCase.capitalizeWords`, `PhoneNumbers` (validate,
+  same-number match on the last 10 digits, dial string).
+- `ui/navigation/` — `Destination`, `BackStack` (+ `jumpTo` for the header's Settings/Menu
+  buttons), `LeaveGuard`. `ui/common/Submission` for one-shot writes. All from Habitz.
+- `ui/common/AppHeader` — `HomeHeader` (app name + date), `BreadcrumbHeader`, `HeaderActions`
+  (Settings + Menu, on every screen).
+- `ui/menu/MenuScreen` — the four Menu buttons, game-menu style.
+- `ui/theme/` — six fixed themes (`AppTheme`: Sicilian Sunset default, Sunset After Dark, Corleone
+  Noir, Limoncello, Amalfi Coast, Nothing); `GodfatherTheme.colors` / `.displayFont`.
+- `GodfatherApplication.appScope` — for writes that must outlive the screen (recording a call).
+- `tools/fetch_icons.py` → `res/drawable/ic_*.xml` (Material Symbols Rounded, Apache 2.0).

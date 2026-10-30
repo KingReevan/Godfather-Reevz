@@ -1,0 +1,13 @@
+*.iml
+.gradle
+/local.properties
+# Android Studio / IntelliJ project config. Nothing here is required to build
+# the project - Studio regenerates it from the Gradle files.
+/.idea/
+# Kotlin compiler session data (generated)
+.kotlin/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
