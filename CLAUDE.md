@@ -54,18 +54,33 @@ Windows / PowerShell:
 ```
 
 Instrumented tests (`connectedDebugAndroidTest`):
-- `GodfatherDatabaseTest` — the rotation transactions against in-memory Room.
-- `AppFlowsTest` — end-to-end flows through the real Activity and **the real database, which it
-  wipes before every test**: empty Home → first friend, call / redial / undo, off-schedule call,
-  duplicate number, edit + discard guard, remove + stats, shuffle confirm, theme + restart, header
-  buttons. Calls go to `FakeCaller` (set on `GodfatherApplication.caller` before the Activity
-  starts) — nobody is dialled. Add a flow here when adding or changing a user-facing flow.
-  Compose's test clock drives coroutine delays: use `mainClock.advanceTimeBy`, not `Thread.sleep`.
+- `GodfatherDatabaseTest` — the rotation transactions against in-memory Room, photo updates, and
+  `upgradingFromV1KeepsEverything`: a database built exactly as schema v1, opened by Room (which
+  runs the auto-migration and checks the result). Add one of these for every new schema version.
+- `FriendPhotosTest` — opening (EXIF rotation, size cap), saving, contact-photo copies, decode
+  sizes and the sweep, on a real device's decoders.
+- `AppFlowsTest` — end-to-end flows through the real Activity and **the real database and photos
+  folder, which it wipes before every test**: empty Home → first friend, call / redial / undo,
+  off-schedule call, duplicate number, edit + discard guard, remove + stats, shuffle confirm,
+  theme + restart, header buttons, photo choose + frame + remove, add with a photo, edit's photo
+  + discard guard. Calls go to `FakeCaller` and photo picks to `FakePhotoPicker` (set on
+  `GodfatherApplication.caller` / `.photoPicker` before the Activity starts) — nobody is dialled,
+  no gallery is opened. Add a flow here when adding or changing a user-facing flow. Compose's
+  test clock drives coroutine delays: use `mainClock.advanceTimeBy`, not `Thread.sleep`.
 
-**`connectedAndroidTest` uninstalls the app when it finishes, which deletes the database.** Once I
-use the app for real, back up the phone's database first
-(`adb exec-out run-as com.reevan.godfatherreevz cat databases/godfather-reevz.db`) and restore it
-after — or run them on an emulator (`ANDROID_SERIAL=emulator-5554`).
+**Real friends are on the phone: run instrumented tests on the emulator**
+(`$env:ANDROID_SERIAL="emulator-5554"`, AVD `habitz_test`, API 34). `connectedAndroidTest`
+uninstalls the app when it finishes, and `AppFlowsTest` wipes the database — on the phone that
+would delete the owner's friends, notes, call history and photos. Wake and unlock the emulator
+first (`adb -s emulator-5554 shell "input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard"`) or
+every UI test fails with "No compose hierarchies found". If tests ever must run on the phone,
+back up first and restore after: `adb exec-out run-as com.reevan.godfatherreevz cat
+databases/<file>` for `godfather-reevz.db`, `-wal` and `-shm` (force-stop the app first), and
+`adb exec-out run-as com.reevan.godfatherreevz tar -cf - files/photos > photos.tar`.
+
+Before installing a build with a schema change on the phone: back up as above, then dry-run the
+upgrade on the emulator with that backup (install, `run-as` copy the three files into
+`databases/`, launch, pull them back and compare the rows), then uninstall it from the emulator.
 
 Target phone: **Nothing Phone (2a), Android 16 (API 36)**, adb serial `00050146M001006`. Update it
 with `adb -s 00050146M001006 install -r app/build/outputs/apk/debug/app-debug.apk` (keeps data).
@@ -88,15 +103,17 @@ adb lives in `%LOCALAPPDATA%\Android\Sdk\platform-tools` (not on PATH). The phon
 
 ## Data guidelines
 
-- Data is stored **locally** in Room (`godfather-reevz.db`). **No backups**, by my choice:
-  `allowBackup="false"` and the backup/extraction rules exclude everything.
+- Data is stored **locally** in Room (`godfather-reevz.db`), plus friends' photos as files in
+  `files/photos`. **No backups**, by my choice: `allowBackup="false"` and the backup/extraction
+  rules exclude everything (the `file` domain included).
 - Once real data is on the phone, schema changes **must** use proper Room migrations
   (`@AutoMigration` where additive). Never `fallbackToDestructiveMigration`. Room schemas are
   exported to `app/schemas/` and committed.
 - **Never write `friends` with REPLACE.** SQLite does it as delete + insert, and the delete sets
   every one of that friend's calls' `friendId` to null. Edits are targeted `UPDATE`s.
-- Do not delete or reset user data as part of a normal feature. Call history and notes are not
-  recoverable.
+- Do not delete or reset user data as part of a normal feature. Call history, notes and photos
+  are not recoverable. A photo file is deleted only when nothing uses it any more: replaced,
+  removed, its friend removed, or unused for a day (`FriendPhotos.sweep`).
 
 ## The rotation (read before touching scheduling)
 
@@ -126,17 +143,27 @@ adb lives in `%LOCALAPPDATA%\Android\Sdk\platform-tools` (not on PATH). The phon
 
 ## Current project state
 
-All seven phases of `docs/PLAN.md` are done. Installed fresh on the phone on 2026-10-30 with zero
-friends. **From the moment real friends are added, schema v1 is frozen** (migrations only) and the
-phone's database must be backed up before any instrumented test run.
+All eight phases of `docs/PLAN.md` are done (8 = profile photos, a later request: D8 in
+`docs/SPEC.md`). **The owner has used the app for real since 2026-10-30** (32 friends, 20 with
+contact photos): the schema (now v2) is frozen — changes only by a new version + migration — and
+nothing that wipes or uninstalls the app may touch the phone (see "Build and verify").
 
 Not exercised on a device: the Android 17 picker branch (phone is API 36), a real direct
 `ACTION_CALL`, and midnight rollover by changing the phone's date.
 
-- `data/` — Room schema v1: `friends` (position/turnUsed rotation columns, notes), `calls` (one row
-  per friend per day pressed; `scheduled`, `consumedTurn`; FK `SET NULL` on removal),
-  `app_settings` (theme, callDirectly). `FriendDao` holds every rotation transaction; `CallDao` is
-  read-only views. Dates are `LocalDate` stored as epoch days.
+- `data/` — Room schema v2: `friends` (position/turnUsed rotation columns, notes, `photo` — added
+  in v2 by `AutoMigration(1, 2)`), `calls` (one row per friend per day pressed; `scheduled`,
+  `consumedTurn`; FK `SET NULL` on removal), `app_settings` (theme, callDirectly). `FriendDao`
+  holds every rotation transaction plus the photo updates (`replacePhoto`, `setPhotoIfNone`,
+  `photosInUse`; `removeFriends` hands back the removed friends' photos); `CallDao` is read-only
+  views. Dates are `LocalDate` stored as epoch days.
+- `photos/` — `FriendPhotos`: a friend's photo is a copy — ≤512 px square JPEG, random name — in
+  `files/photos`; `Friend.photo` is the file name. `open` (picker/contact URI → upright bitmap,
+  EXIF applied, ≤2048 px), `save` (a framed `Square` → new file), `copyContactPhoto`, `load`
+  (sampled for an avatar's size), `delete`, `sweep` (unused files over a day old; run at app
+  start — a form may hold an unsaved one). A changed photo is a new file, so caches never go
+  stale. `Framing` (pure, pinned by `FramingTest`): the framing step's centre/zoom in picture
+  pixels, drag, pinch-around-the-fingers, clamping, and the saved square.
 - `rotation/Rotation.kt` + `RotationTest` — see "The rotation" above.
 - `util/` — `TodayClock` + `clockChanges` (from Habitz), `Dates` (`formatCallDate` = dd-mm-yyyy,
   `formatLastCalled` = "-" when never), `TextCase.capitalizeWords`, `PhoneNumbers` (validate,
@@ -154,15 +181,25 @@ Not exercised on a device: the Android 17 picker branch (phone is API 36), a rea
   weight axis is its dot size, so each weight reads +200 further along it.
 - `ui/common/FriendCards` — `TodayCard` (gradient, pulsing ring until called), `FriendCard`
   (upcoming; optional "Up next" chip), `PastCard` (faded recent call), `Initials`. Every card has
-  its date bottom-right: last-called (`-` when never) or, for past cards, that call's date.
+  the friend's photo and its date bottom-right: last-called (`-` when never) or, for past cards,
+  that call's date.
+- `ui/common/FriendAvatar` — `FriendAvatar` (photo, else `Initials`) and `ContactAvatar` (a
+  contact's thumbnail, for the importer); decoded off the main thread into a small LRU cache.
+- `ui/photo/PhotoEditor` — `EditablePhoto`, used by the friend page, Add and Edit: tap → Choose
+  photo (`LocalPhotoPicker` = the system photo picker; the framing dialog: drag, pinch, Use
+  photo) / Use contact photo (with contacts access) / Remove photo. One activity-wide
+  `PhotoEditorViewModel` holds the picture being framed and the outcome, tagged with the asking
+  screen's `owner`, so both survive rotation.
 - `ui/settings/` — Settings: theme picker (radio rows with a swatch, each name in its own
   display font); Calling ("Call directly" switch + phone-permission row); Contacts (permission
-  row); Order (Shuffle again → confirm dialog → `FriendDao.reshuffle` → "Shuffled"); About.
+  row; "Photos from contacts" → Copy: friends without a photo get their contact's, matched by
+  `contactPhotoFor`); Order (Shuffle again → confirm dialog → `FriendDao.reshuffle` → "Shuffled"); About.
   Permission rows re-check on resume: "Allow" asks, and once Android stops asking, "Open
   settings".
 - `GodfatherApplication.appScope` — for writes that must outlive the screen (recording a call,
-  undo, notes, reshuffle). `GodfatherApplication.caller` — what `MainActivity` provides as
-  `LocalCaller` (tests swap in a fake).
+  undo, notes, photo changes, reshuffle). `GodfatherApplication.caller` / `.photoPicker` — what
+  `MainActivity` provides as `LocalCaller` / `LocalPhotoPicker` (tests swap in fakes). Its
+  `onCreate` sweeps unused photo files.
 - `ui/home/` — Home's focus stack. **Layout rules are the pure `buildHome`** (pinned by
   `HomeLayoutTest`): today's card = today's scheduled call's friend once made (stays until
   midnight; a removed friend shows by saved name), else the rotation head; upcoming = everyone else
@@ -170,7 +207,8 @@ Not exercised on a device: the Android 17 picker branch (phone is API 36), a rea
   history, so nothing visibly resets at the end of a pass. `HomeViewModel` lives in the shell;
   `HomeScroll` (shell-held) keeps the list position across visits and centres today's card when
   the friend in focus changes.
-- `ui/details/` — friend page: facts, notes (debounced 600ms + saved on leaving, via appScope),
+- `ui/details/` — friend page: photo (`EditablePhoto`; a change saves at once and deletes the old
+  file), facts, notes (debounced 600ms + saved on leaving, via appScope),
   "Called today ✓ · Undo" (confirm dialog), Call button. Call = `recordCall()` first (idempotent
   per friend per day), then `LocalCaller` places it: `ACTION_CALL` if "Call directly" and
   CALL_PHONE granted, else asks for the permission once and falls back to `ACTION_DIAL`. A 1.5s
@@ -179,13 +217,13 @@ Not exercised on a device: the Android 17 picker branch (phone is API 36), a rea
 - `util/Search.matchesSearch` — the one search rule (name ignoring case/accents, or 3+ digits of a
   number) for the importer, Edit and Remove. `ui/common/FriendList` — `FriendSearchField`,
   `FriendRow`, `filterFriends`, `ListMessage`.
-- `ui/editfriend/` — Edit Friend: A–Z searchable list → editor (`key`ed by friend id) for name and
-  phone only; Save enabled only for a real, valid change (`FriendDraft.changes`, compared as
+- `ui/editfriend/` — Edit Friend: A–Z searchable list → editor (`key`ed by friend id) for photo,
+  name and phone; Save enabled only for a real, valid change (a new photo counts) (`FriendDraft.changes`, compared as
   saved); leaving with changes goes through `LeaveGuard` → "Discard changes?" → lands exactly
   where the owner was heading. Saving is an in-place UPDATE: rotation place, calls, notes untouched.
 - `ui/removefriend/` — Remove Friend: A–Z searchable, whole row toggles the checkbox, red
-  "Remove (n)" → confirm ("Their notes go with them. Past calls stay in Statistics.") → back to
-  Menu. Calls keep the friend's name snapshot (FK `SET NULL`).
+  "Remove (n)" → confirm ("Their notes and photos go with them. Past calls stay in Statistics.")
+  → back to Menu; their photo files are deleted. Calls keep the friend's name snapshot (FK `SET NULL`).
 - `ui/statistics/` — **all numbers come from the pure `callStats`** (pinned by `CallStatsTest`):
   friends, calls made (removed friends' calls included), this month = days with a call / days so
   far (from the start, if that was this month), current streak (an uncalled today keeps
@@ -202,17 +240,21 @@ Not exercised on a device: the Android 17 picker branch (phone is API 36), a rea
 - `ui/friendform/` — `FriendDraft` (pure: validation, duplicate check by `PhoneNumbers.sameNumber`,
   tidy save), `FriendFormScaffold`, `FriendNameField` (display-only capitalisation, as in Habitz),
   `FriendPhoneField`. Shared by Add and (phase 5) Edit.
-- `ui/addfriend/` — Add Friend: "Choose from contacts" card + manual form; adding clears the form
-  and stays. `AddFriendViewModel.add` re-checks duplicates against the database (`planAdd`, pure)
-  and returns an `AddResult` message ("5 friends added · 1 already saved").
+- `ui/addfriend/` — Add Friend: "Choose from contacts" card + manual form (with an optional photo);
+  adding clears the form and stays. `AddFriendViewModel.add` / `.addPicks` re-check duplicates
+  against the database (`planAdd`, pure), copy each `ContactPick`'s contact photo for those
+  added, and return an `AddResult` message ("5 friends added · 1 already saved").
 - `contacts/PhoneContacts` — reads the phonebook (READ_CONTACTS), `groupContacts` (pure: one per
   contact, same-number duplicates merged, default number first, locale A–Z), the system picker
   intent (API 37+: `ContactsPickerSessionContract.ACTION_PICK_CONTACTS` multi-select; older:
-  `ACTION_PICK` on phone numbers) and reading its result URI.
+  `ACTION_PICK` on phone numbers) and reading its result URI. Contacts carry their `photo`
+  (PHOTO_URI) and `thumbnail`; `contactPhotoFor` (pure) finds a number's contact photo. The
+  classic system picker asks for the photo too, but without contacts access it usually can't be
+  read, so those friends come in without one.
 - `ui/contactpicker/` — the importer: permission prompt (explanation → request; refused twice →
   Open settings; always offers the system picker), searchable A–Z list with sticky letters,
-  checkboxes, number choice for multi-number contacts, already-saved contacts disabled. "Add N
-  friends" returns Home. System-picker picks are added at once. The API 37 picker branch has not
+  checkboxes and contact photos, number choice for multi-number contacts, already-saved contacts
+  disabled. "Add N friends" (photos copied) returns Home. System-picker picks are added at once. The API 37 picker branch has not
   been run on a device (the phone is API 36).
 
 Generated assets — edit the script, not the output (licences in `docs/THIRD_PARTY.md`):

@@ -32,8 +32,8 @@ import com.reevan.godfatherreevz.ui.theme.GodfatherTheme
 import com.reevan.godfatherreevz.util.matchesSearch
 
 /*
- * The plain A–Z friend lists of Edit Friend and Remove Friend: a search box over rows of initials,
- * name and number, with a trailing slot (a chevron or a checkbox).
+ * The plain A–Z friend lists of Edit Friend and Remove Friend: a search box over rows of photo (or
+ * initials), name and number, with a trailing slot (a chevron or a checkbox).
  */
 
 /** Friends matching the search [query] (see [matchesSearch]). */
@@ -83,7 +83,7 @@ fun FriendRow(
             it()
             Spacer(Modifier.width(8.dp))
         }
-        Initials(friend.name, size = 42)
+        FriendAvatar(friend.name, friend.photo, size = 42)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(

@@ -1,6 +1,7 @@
 package com.reevan.godfatherreevz.data
 
 import android.content.Context
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -9,6 +10,7 @@ import androidx.room.TypeConverters
 /**
  * Schema history:
  * - v1: `friends`, `calls`, `app_settings`
+ * - v2: `friends.photo` (nullable) — friends' photos. Auto-migrated.
  *
  * Once real friends are on the phone, v1 is frozen: never edit it in place. Every schema change is
  * a version bump plus a migration here. Adding a table, or a nullable column, is purely additive,
@@ -22,8 +24,9 @@ import androidx.room.TypeConverters
         Call::class,
         AppSettings::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
 )
 @TypeConverters(Converters::class)
 abstract class GodfatherDatabase : RoomDatabase() {

@@ -35,11 +35,13 @@ import com.reevan.godfatherreevz.ui.friendform.FriendDraft
 import com.reevan.godfatherreevz.ui.friendform.FriendFormScaffold
 import com.reevan.godfatherreevz.ui.friendform.FriendNameField
 import com.reevan.godfatherreevz.ui.friendform.FriendPhoneField
+import com.reevan.godfatherreevz.ui.photo.EditablePhoto
 import com.reevan.godfatherreevz.ui.theme.GodfatherTheme
 
 /**
- * Add Friend: pick several from the phonebook (the importer), or type a name and number. Adding
- * by hand stays on the page with the form cleared, so several can be added in a row.
+ * Add Friend: pick several from the phonebook (the importer), or type a name and number, with a
+ * photo if wanted. Adding by hand stays on the page with the form cleared, so several can be added
+ * in a row.
  */
 @Composable
 fun AddFriendScreen(
@@ -51,6 +53,8 @@ fun AddFriendScreen(
     val messages = LocalAppMessages.current
     val name = rememberTextFieldState()
     val phone = rememberTextFieldState()
+    // A photo chosen for the friend being typed in (a saved file; one left unused is tidied away).
+    var photo by rememberSaveable { mutableStateOf<String?>(null) }
     var token by rememberSaveable { mutableStateOf<String?>(null) }
 
     val submission = rememberSubmission(viewModel.submissions, repeatable = true) {
@@ -58,11 +62,12 @@ fun AddFriendScreen(
         if (result != null && result.added.isNotEmpty()) {
             name.clearText()
             phone.clearText()
+            photo = null
         }
         messages.show(result?.message() ?: "Friend added")
     }
 
-    val draft = FriendDraft(name.text.toString(), phone.text.toString())
+    val draft = FriendDraft(name.text.toString(), phone.text.toString(), photo)
     val check = draft.check(friends.orEmpty())
 
     FriendFormScaffold(
@@ -77,6 +82,15 @@ fun AddFriendScreen(
     ) {
         ContactsCard(onClick = onOpenContacts)
         OrDivider()
+        EditablePhoto(
+            owner = "add-friend",
+            name = draft.name,
+            photo = photo,
+            phone = draft.phone,
+            onChange = { photo = it },
+            size = 88,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
         FriendNameField(state = name)
         FriendPhoneField(state = phone, error = check.phoneError)
         Text(

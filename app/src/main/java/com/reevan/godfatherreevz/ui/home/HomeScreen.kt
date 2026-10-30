@@ -97,6 +97,7 @@ fun HomeScreen(
         itemsIndexed(home.past, key = { _, item -> "past-${item.friendId}" }) { _, item ->
             PastCard(
                 name = item.name,
+                photo = item.photo,
                 date = item.date,
                 onClick = { open(item.friendId) },
                 modifier = Modifier
@@ -108,6 +109,7 @@ fun HomeScreen(
             item(key = "today") {
                 TodayCard(
                     name = today.name,
+                    photo = today.photo,
                     phone = today.phone,
                     lastCalled = today.lastCalled,
                     done = today.done,
@@ -122,6 +124,7 @@ fun HomeScreen(
         itemsIndexed(home.upcoming, key = { _, item -> "friend-${item.friendId}" }) { index, item ->
             FriendCard(
                 name = item.name,
+                photo = item.photo,
                 lastCalled = item.lastCalled,
                 onClick = { open(item.friendId) },
                 label = if (index == 0) "Up next" else null,

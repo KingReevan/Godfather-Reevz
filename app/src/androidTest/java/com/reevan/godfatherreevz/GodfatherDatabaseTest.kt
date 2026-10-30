@@ -1,8 +1,11 @@
 package com.reevan.godfatherreevz
 
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.reevan.godfatherreevz.data.AppTheme
 import com.reevan.godfatherreevz.data.CallOutcome
 import com.reevan.godfatherreevz.data.FriendDao
 import com.reevan.godfatherreevz.data.GodfatherDatabase
@@ -132,7 +135,7 @@ class GodfatherDatabaseTest {
         val head = head()
         friends.recordCall(head, today, random)
         val before = order().first { it.friend.id == head }
-        friends.updateDetails(head, "Renamed", "+1 555 0100")
+        friends.updateDetails(head, "Renamed", "+1 555 0100", "new.jpg")
         val after = order().first { it.friend.id == head }
         assertEquals(before.friend.position, after.friend.position)
         assertEquals(before.lastCalled, after.lastCalled)
@@ -156,5 +159,100 @@ class GodfatherDatabaseTest {
         assertEquals(b, head())
         assertEquals(CallOutcome.ALREADY_RECORDED, friends.recordCall(b, today, random))
         assertTrue(db.callDao().observeCallOn(b, today).first()!!.scheduled)
+    }
+
+    // ---- Photos --------------------------------------------------------------------------------
+
+    @Test
+    fun photosChangeWithoutTouchingTheRotation() = runBlocking {
+        val (a, b) = add("A", "B", "C")
+        friends.recordCall(head(), today, random)
+        val before = order().map { it.friend.copy(photo = null) to it.lastCalled }
+
+        assertNull(friends.replacePhoto(a, "a1.jpg"))
+        assertEquals("a1.jpg", friends.replacePhoto(a, "a2.jpg"))
+        assertTrue(friends.setPhotoIfNone(b, "b1.jpg"))
+        // Someone with a photo keeps it.
+        assertFalse(friends.setPhotoIfNone(b, "b2.jpg"))
+        assertEquals("b1.jpg", friends.get(b)!!.photo)
+        assertEquals(setOf("a2.jpg", "b1.jpg"), friends.photosInUse().toSet())
+
+        assertEquals(before, order().map { it.friend.copy(photo = null) to it.lastCalled })
+        assertEquals("a2.jpg", friends.replacePhoto(a, null))
+        assertNull(friends.get(a)!!.photo)
+    }
+
+    @Test
+    fun aNewFriendCanComeWithAPhoto_andRemovingThemHandsItBack() = runBlocking {
+        val (id) = friends.addFriends(listOf(NewFriend("Ana", "90000 00001", photo = "ana.jpg")), today, 0L, random)
+        add("B")
+        assertEquals("ana.jpg", friends.get(id)!!.photo)
+        assertEquals(listOf("ana.jpg"), friends.removeFriends(listOf(id)))
+        assertEquals(emptyList<String>(), friends.photosInUse())
+    }
+
+    /**
+     * Schema v1 → v2 (photos) on a database built exactly as `app/schemas/.../1.json` describes —
+     * what the owner's phone had. Room runs the auto-migration and then checks the result against
+     * the v2 schema, so any mismatch fails here.
+     */
+    @Test
+    fun upgradingFromV1KeepsEverything() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val name = "migration-test.db"
+        context.deleteDatabase(name)
+        SQLiteDatabase.openOrCreateDatabase(context.getDatabasePath(name), null).use { v1 ->
+            V1_SCHEMA.forEach(v1::execSQL)
+            v1.execSQL(
+                "INSERT INTO friends (id, name, phone, notes, addedOn, createdAt, position, turnUsed) VALUES " +
+                    "(1, 'Ana', '90000 00001', 'Likes jazz', 20390, 5, 1, 0), (2, 'Bo', '90000 00002', '', 20391, 6, 0, 1)",
+            )
+            v1.execSQL(
+                "INSERT INTO calls (id, friendId, friendName, date, scheduled, consumedTurn) VALUES " +
+                    "(1, 2, 'Bo', 20755, 1, 1), (2, NULL, 'Gone', 20750, 1, 1)",
+            )
+            v1.execSQL("INSERT INTO app_settings (id, theme, callDirectly) VALUES (1, 'NOTHING', 0)")
+            v1.version = 1
+        }
+
+        val upgraded = Room.databaseBuilder(context, GodfatherDatabase::class.java, name).build()
+        try {
+            val all = upgraded.friendDao().observeInCallOrder().first()
+            assertEquals(listOf("Bo", "Ana"), all.map { it.friend.name })
+            assertEquals(listOf(true, false), all.map { it.friend.turnUsed })
+            assertEquals("Likes jazz", all[1].friend.notes)
+            assertEquals(LocalDate.ofEpochDay(20390), all[1].friend.addedOn)
+            assertEquals(LocalDate.ofEpochDay(20755), all[0].lastCalled)
+            assertTrue(all.all { it.friend.photo == null })
+            assertEquals(2, upgraded.callDao().observeAll().first().size)
+            val settings = upgraded.appSettingsDao().observe().first()!!
+            assertEquals(AppTheme.NOTHING, settings.theme)
+            assertFalse(settings.callDirectly)
+            // And the new column works.
+            assertNull(upgraded.friendDao().replacePhoto(1, "ana.jpg"))
+            assertEquals("ana.jpg", upgraded.friendDao().get(1)!!.photo)
+        } finally {
+            upgraded.close()
+            context.deleteDatabase(name)
+        }
+    }
+
+    private companion object {
+        /** Schema v1, from `app/schemas/com.reevan.godfatherreevz.data.GodfatherDatabase/1.json`. */
+        val V1_SCHEMA = listOf(
+            "CREATE TABLE IF NOT EXISTS `friends` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, " +
+                "`phone` TEXT NOT NULL, `notes` TEXT NOT NULL DEFAULT '', `addedOn` INTEGER NOT NULL, " +
+                "`createdAt` INTEGER NOT NULL, `position` INTEGER NOT NULL, `turnUsed` INTEGER NOT NULL)",
+            "CREATE TABLE IF NOT EXISTS `calls` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `friendId` INTEGER, " +
+                "`friendName` TEXT NOT NULL, `date` INTEGER NOT NULL, `scheduled` INTEGER NOT NULL, " +
+                "`consumedTurn` INTEGER NOT NULL, FOREIGN KEY(`friendId`) REFERENCES `friends`(`id`) " +
+                "ON UPDATE NO ACTION ON DELETE SET NULL )",
+            "CREATE UNIQUE INDEX IF NOT EXISTS `index_calls_friendId_date` ON `calls` (`friendId`, `date`)",
+            "CREATE INDEX IF NOT EXISTS `index_calls_date` ON `calls` (`date`)",
+            "CREATE TABLE IF NOT EXISTS `app_settings` (`id` INTEGER NOT NULL, `theme` TEXT NOT NULL, " +
+                "`callDirectly` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+            "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+            "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4767e6bc72cfb91346098d0b044aed3b')",
+        )
     }
 }

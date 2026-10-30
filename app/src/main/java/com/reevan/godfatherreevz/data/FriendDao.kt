@@ -11,8 +11,8 @@ import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 import kotlin.random.Random
 
-/** A friend about to be added. */
-data class NewFriend(val name: String, val phone: String)
+/** A friend about to be added. [photo] is a photo file already saved for them, if any. */
+data class NewFriend(val name: String, val phone: String, val photo: String? = null)
 
 /** What pressing Call did. */
 enum class CallOutcome {
@@ -77,11 +77,30 @@ abstract class FriendDao {
     // ---- Edits that never touch the rotation -------------------------------------------------
 
     /** In place, never REPLACE: the friend's calls and rotation place stay exactly as they were. */
-    @Query("UPDATE friends SET name = :name, phone = :phone WHERE id = :id")
-    abstract suspend fun updateDetails(id: Long, name: String, phone: String): Int
+    @Query("UPDATE friends SET name = :name, phone = :phone, photo = :photo WHERE id = :id")
+    abstract suspend fun updateDetails(id: Long, name: String, phone: String, photo: String?): Int
 
     @Query("UPDATE friends SET notes = :notes WHERE id = :id")
     abstract suspend fun updateNotes(id: Long, notes: String)
+
+    /** Sets (or, with null, removes) a friend's photo. Returns the photo it replaced, if any. */
+    @Transaction
+    open suspend fun replacePhoto(id: Long, photo: String?): String? {
+        val old = get(id)?.photo
+        updatePhoto(id, photo)
+        return old
+    }
+
+    /** Gives a friend [photo] only if they have none yet. Returns false if they had one (or are gone). */
+    @Transaction
+    open suspend fun setPhotoIfNone(id: Long, photo: String): Boolean {
+        if (get(id)?.photo != null) return false
+        return updatePhoto(id, photo) == 1
+    }
+
+    /** Every photo file a friend uses — anything else in the photos folder is left over. */
+    @Query("SELECT photo FROM friends WHERE photo IS NOT NULL")
+    abstract suspend fun photosInUse(): List<String>
 
     // ---- Rotation changes --------------------------------------------------------------------
 
@@ -106,6 +125,7 @@ abstract class FriendDao {
                     addedOn = today,
                     createdAt = createdAt,
                     position = order.size,
+                    photo = new.photo,
                 ),
             )
             order = Rotation.addFriend(order, id, headLocked, random)
@@ -176,12 +196,17 @@ abstract class FriendDao {
         return true
     }
 
-    /** Removes [ids]. Their calls stay (friendId set to null) so Statistics keep counting them. */
+    /**
+     * Removes [ids]. Their calls stay (friendId set to null) so Statistics keep counting them.
+     * Returns the photos they had, for the caller to delete.
+     */
     @Transaction
-    open suspend fun removeFriends(ids: List<Long>) {
-        if (ids.isEmpty()) return
+    open suspend fun removeFriends(ids: List<Long>): List<String> {
+        if (ids.isEmpty()) return emptyList()
+        val photos = photosOf(ids)
         deleteFriends(ids)
         save(Rotation.afterRemoval(slots()))
+        return photos
     }
 
     /** Settings > Shuffle again. */
@@ -209,6 +234,12 @@ abstract class FriendDao {
 
     @Query("DELETE FROM friends WHERE id IN (:ids)")
     abstract suspend fun deleteFriends(ids: List<Long>): Int
+
+    @Query("UPDATE friends SET photo = :photo WHERE id = :id")
+    abstract suspend fun updatePhoto(id: Long, photo: String?): Int
+
+    @Query("SELECT photo FROM friends WHERE id IN (:ids) AND photo IS NOT NULL")
+    abstract suspend fun photosOf(ids: List<Long>): List<String>
 
     /** Returns -1 if this friend already has a call on that date. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)

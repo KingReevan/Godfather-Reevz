@@ -55,8 +55,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.reevan.godfatherreevz.GodfatherApplication
 import com.reevan.godfatherreevz.R
-import com.reevan.godfatherreevz.ui.common.Initials
 import com.reevan.godfatherreevz.ui.common.LocalAppMessages
+import com.reevan.godfatherreevz.ui.photo.EditablePhoto
 import com.reevan.godfatherreevz.ui.settings.PreferencesViewModel
 import com.reevan.godfatherreevz.ui.theme.GodfatherTheme
 import com.reevan.godfatherreevz.util.LocalCaller
@@ -69,8 +69,9 @@ import kotlinx.coroutines.flow.drop
 const val CALL_BUTTON_TAG = "call-button"
 
 /**
- * A friend's page: who they are, when they were last called, conversation notes (D4), and the
- * Call button at the bottom — the only thing that counts a call (the brief).
+ * A friend's page: their photo (tap to change it), who they are, when they were last called,
+ * conversation notes (D4), and the Call button at the bottom — the only thing that counts a call
+ * (the brief).
  *
  * Pressing Call records the call first (on the app-wide scope, so it lands even if the app is put
  * away for the call), then places it: straight away with the phone permission and "Call
@@ -128,6 +129,7 @@ fun FriendDetailsScreen(
                 }
             },
             onNotesChanged = viewModel::saveNotes,
+            onPhotoChanged = viewModel::setPhoto,
             modifier = modifier,
         )
     }
@@ -139,6 +141,7 @@ private fun DetailsContent(
     onCall: () -> Unit,
     onUndo: () -> Unit,
     onNotesChanged: (String) -> Unit,
+    onPhotoChanged: (String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val friend = state.friend
@@ -179,7 +182,14 @@ private fun DetailsContent(
                 .padding(20.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Initials(friend.name, size = 64)
+                EditablePhoto(
+                    owner = "details-${friend.id}",
+                    name = friend.name,
+                    photo = friend.photo,
+                    phone = friend.phone,
+                    onChange = onPhotoChanged,
+                    size = 88,
+                )
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     RoleChip(state)

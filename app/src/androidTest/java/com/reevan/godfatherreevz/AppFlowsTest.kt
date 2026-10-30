@@ -1,6 +1,12 @@
 package com.reevan.godfatherreevz
 
 import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContract
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
@@ -14,6 +20,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -41,6 +48,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.ExternalResource
 import org.junit.runner.RunWith
+import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.random.Random
 
@@ -53,6 +61,14 @@ class FakeCaller : Caller {
         dialled += phone
         return true
     }
+}
+
+/** Picks no photo from the phone: always hands back [picture] at once. */
+class FakePhotoPicker(private val picture: Uri) : ActivityResultContract<PickVisualMediaRequest, Uri?>() {
+    override fun createIntent(context: Context, input: PickVisualMediaRequest) = Intent()
+    override fun parseResult(resultCode: Int, intent: Intent?): Uri? = null
+    override fun getSynchronousResult(context: Context, input: PickVisualMediaRequest) =
+        ActivityResultContract.SynchronousResult<Uri?>(picture)
 }
 
 /**
@@ -68,16 +84,19 @@ class AppFlowsTest {
     private val caller = FakeCaller()
     private val today get() = TodayClock.instance.today.value
 
-    /** Runs before the Activity starts: a clean database and the fake caller. */
+    /** Runs before the Activity starts: a clean database and photos folder, and the fakes. */
     @get:Rule(order = 0)
     val setUp = object : ExternalResource() {
         override fun before() {
             db.clearAllTables()
+            photosFolder.deleteRecursively()
             app.caller = caller
+            app.photoPicker = FakePhotoPicker(testPicture())
         }
 
         override fun after() {
             app.caller = AndroidCaller
+            app.photoPicker = ActivityResultContracts.PickVisualMedia()
         }
     }
 
@@ -112,6 +131,29 @@ class AppFlowsTest {
     }
 
     private fun todayCard() = compose.onNodeWithTag(TODAY_CARD_TAG, useUnmergedTree = false)
+
+    private fun friend(id: Long) = runBlocking { db.friendDao().get(id)!! }
+
+    private val photosFolder get() = File(app.filesDir, "photos")
+
+    /** A 1200 x 900 picture for the fake photo picker to hand back. */
+    private fun testPicture(): Uri {
+        val file = File(app.cacheDir, "flow-test-picture.jpg")
+        val bitmap = Bitmap.createBitmap(1200, 900, Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.RED) }
+        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        return Uri.fromFile(file)
+    }
+
+    /** Taps the photo ([avatar] is its label), picks the test picture and keeps the framing. */
+    private fun choosePhoto(avatar: String) {
+        compose.onNodeWithContentDescription(avatar).performClick()
+        // With contacts access there's a menu first.
+        if (compose.onAllNodesWithText("Choose photo").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithText("Choose photo").performClick()
+        }
+        waitFor("Frame the photo")
+        compose.onNodeWithText("Use photo").performClick()
+    }
 
     // ---- Home ---------------------------------------------------------------------------------
 
@@ -288,5 +330,65 @@ class AppFlowsTest {
         compose.onNodeWithText("REMOVE FRIEND").assertIsDisplayed()
         compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithTag(TODAY_CARD_TAG).assertIsDisplayed()
+    }
+
+    // ---- Photos -------------------------------------------------------------------------------
+
+    @Test
+    fun aFriendsPhoto_isChosenAndFramedOnTheirPage_thenRemoved() {
+        seedThree()
+        val head = order().first().friend
+        val before = order().map { it.friend.position to it.friend.turnUsed }
+        todayCard().performClick()
+
+        choosePhoto("Add photo")
+        waitUntil { friend(head.id).photo != null }
+        val photo = friend(head.id).photo!!
+        assertTrue(File(photosFolder, photo).exists())
+        assertEquals(before, order().map { it.friend.position to it.friend.turnUsed })
+
+        compose.onNodeWithContentDescription("Change photo").performClick()
+        compose.onNodeWithText("Remove photo").performClick()
+        waitUntil { friend(head.id).photo == null }
+        waitUntil { !File(photosFolder, photo).exists() }
+    }
+
+    @Test
+    fun addFriend_withAPhoto() {
+        openMenu("ADD FRIEND")
+        choosePhoto("Add photo")
+        // The form shows the photo.
+        waitUntil { compose.onAllNodesWithContentDescription("Change photo").fetchSemanticsNodes().isNotEmpty() }
+        val fields = compose.onAllNodes(hasSetTextAction())
+        fields[0].performTextInput("Marco Rossi")
+        fields[1].performTextInput("+91 98765 43210")
+        button("Add Friend").performClick()
+        waitFor("Marco Rossi added")
+
+        waitUntil { order().size == 1 }
+        val photo = order().single().friend.photo
+        assertTrue(photo != null && File(photosFolder, photo).exists())
+        // The form is cleared for the next friend, photo included.
+        compose.onNodeWithContentDescription("Add photo").assertIsDisplayed()
+    }
+
+    @Test
+    fun editFriend_aNewPhotoIsAChange_keptOnlyOnSave() {
+        seedThree()
+        val ana = order().first { it.friend.name == "Ana" }.friend
+        openMenu("EDIT FRIEND")
+        compose.onNodeWithText("Ana").performClick()
+        button("Save").assertIsNotEnabled()
+
+        choosePhoto("Add photo")
+        button("Save").assertIsEnabled()
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithText("Discard changes?").assertIsDisplayed()
+        compose.onNodeWithText("Keep editing").performClick()
+        assertNull(friend(ana.id).photo)
+
+        button("Save").performClick()
+        waitUntil { friend(ana.id).photo != null }
+        assertEquals(ana.position, friend(ana.id).position)
     }
 }

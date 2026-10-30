@@ -34,4 +34,15 @@ class FriendEditsTest {
         assertEquals(listOf(1L), filterFriends(friends, "43210").map { it.id })
         assertEquals(friends, filterFriends(friends, ""))
     }
+
+    @Test
+    fun `a new or removed photo is a change`() {
+        assertFalse(FriendDraft("Marco Rossi", "+91 98765 43210", photo = null).changes(marco))
+        assertTrue(FriendDraft("Marco Rossi", "+91 98765 43210", photo = "a.jpg").changes(marco))
+        val withPhoto = marco.copy(photo = "a.jpg")
+        assertFalse(FriendDraft("Marco Rossi", "+91 98765 43210", photo = "a.jpg").changes(withPhoto))
+        assertTrue(FriendDraft("Marco Rossi", "+91 98765 43210", photo = "b.jpg").changes(withPhoto))
+        assertTrue(FriendDraft("Marco Rossi", "+91 98765 43210", photo = null).changes(withPhoto))
+        assertEquals("b.jpg", FriendDraft("marco rossi", "98765 43210", photo = "b.jpg").toNewFriend().photo)
+    }
 }

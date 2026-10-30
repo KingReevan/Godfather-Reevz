@@ -71,7 +71,8 @@ import com.reevan.godfatherreevz.contacts.PhoneContact
 import com.reevan.godfatherreevz.contacts.PhoneContacts
 import com.reevan.godfatherreevz.data.Friend
 import com.reevan.godfatherreevz.ui.addfriend.AddFriendViewModel
-import com.reevan.godfatherreevz.ui.common.Initials
+import com.reevan.godfatherreevz.ui.addfriend.ContactPick
+import com.reevan.godfatherreevz.ui.common.ContactAvatar
 import com.reevan.godfatherreevz.ui.common.LocalAppMessages
 import com.reevan.godfatherreevz.ui.common.rememberSubmission
 import com.reevan.godfatherreevz.ui.friendform.FriendDraft
@@ -81,7 +82,7 @@ import kotlinx.coroutines.launch
 
 /**
  * The contact importer (Add Friend › Contacts): the phonebook as a searchable A–Z list with
- * checkboxes, so several friends can be added at once. Contacts already saved as friends are shown
+ * checkboxes, so several friends can be added at once — each with their contact photo. Contacts already saved as friends are shown
  * but can't be ticked; for a contact with several numbers, the one to call is chosen under it.
  *
  * Needs READ_CONTACTS, asked for here with an explanation first. Refused, it offers the system
@@ -136,7 +137,10 @@ fun ContactImportScreen(
             }
             val token = picked.start() ?: return@launch
             pickToken = token
-            addViewModel.add(token, contacts.map { FriendDraft(it.name, it.numbers.first().number).toNewFriend() })
+            addViewModel.addPicks(
+                token,
+                contacts.map { ContactPick(FriendDraft(it.name, it.numbers.first().number).toNewFriend(), it.photo) },
+            )
         }
     }
     val openSystemPicker = {
@@ -234,12 +238,12 @@ fun ContactImportScreen(
                 onClick = {
                     val contacts = (state as? ContactsState.Loaded)?.contacts ?: return@Button
                     val chosen = contacts.mapNotNull { contact ->
-                        selection[contact.key]?.let { FriendDraft(contact.name, it).toNewFriend() }
+                        selection[contact.key]?.let { ContactPick(FriendDraft(contact.name, it).toNewFriend(), contact.photo) }
                     }
                     if (chosen.isEmpty()) return@Button
                     val token = bulk.start() ?: return@Button
                     bulkToken = token
-                    addViewModel.add(token, chosen)
+                    addViewModel.addPicks(token, chosen)
                 },
                 enabled = selection.isNotEmpty() && friends != null && !bulk.inProgress,
                 modifier = Modifier.heightIn(min = 48.dp),
@@ -323,7 +327,7 @@ private fun ContactItem(
         ) {
             Checkbox(checked = chosen != null, onCheckedChange = null, enabled = enabled)
             Spacer(Modifier.width(8.dp))
-            Initials(contact.name, size = 40)
+            ContactAvatar(contact.name, contact.thumbnail, size = 40)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(

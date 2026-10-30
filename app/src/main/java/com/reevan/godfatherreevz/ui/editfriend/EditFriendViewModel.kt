@@ -10,6 +10,7 @@ import com.reevan.godfatherreevz.data.Friend
 import com.reevan.godfatherreevz.data.FriendDao
 import com.reevan.godfatherreevz.data.GodfatherDatabase
 import com.reevan.godfatherreevz.data.NewFriend
+import com.reevan.godfatherreevz.photos.FriendPhotos
 import com.reevan.godfatherreevz.ui.common.SubmissionTracker
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -17,7 +18,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** Edit Friend: the list, and the editor's load and save. */
-class EditFriendViewModel(private val friendDao: FriendDao) : ViewModel() {
+class EditFriendViewModel(
+    private val application: Application,
+    private val friendDao: FriendDao,
+) : ViewModel() {
 
     /** Every friend A–Z; null until loaded. Also the editor's duplicate-number check. */
     val friends: StateFlow<List<Friend>?> = friendDao.observeAlphabetical()
@@ -28,12 +32,13 @@ class EditFriendViewModel(private val friendDao: FriendDao) : ViewModel() {
     suspend fun load(id: Long): Friend? = friendDao.get(id)
 
     /**
-     * Saves the new name and number — an in-place UPDATE, so the friend's place in the rotation,
-     * call history and notes stay exactly as they were.
+     * Saves [original]'s new photo, name and number — an in-place UPDATE, so their place in the
+     * rotation, call history and notes stay exactly as they were. A replaced photo is deleted.
      */
-    fun save(token: String, id: Long, edited: NewFriend) {
+    fun save(token: String, original: Friend, edited: NewFriend) {
         viewModelScope.launch {
-            friendDao.updateDetails(id, edited.name, edited.phone)
+            friendDao.updateDetails(original.id, edited.name, edited.phone, edited.photo)
+            if (edited.photo != original.photo) FriendPhotos.delete(application, original.photo)
             submissions.complete(token)
         }
     }
@@ -43,7 +48,7 @@ class EditFriendViewModel(private val friendDao: FriendDao) : ViewModel() {
             initializer {
                 val application =
                     this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as Application
-                EditFriendViewModel(GodfatherDatabase.getInstance(application).friendDao())
+                EditFriendViewModel(application, GodfatherDatabase.getInstance(application).friendDao())
             }
         }
     }

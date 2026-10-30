@@ -45,6 +45,7 @@ App Icon: Something resembling Don Coreleone. The Godfather. A man in a tuxed/su
 | D5 | Home layout | **Focus stack (timeline):** recent past calls above (faded), today's card enlarged and centred, everyone else below in upcoming order. |
 | D6 | Menu | **Full-screen Menu page** with four big buttons. |
 | D7 | Themes | **Fixed themes**, each one complete look (light or dark), chosen in Settings. No "follow system". |
+| D8 | Profile photos (asked for 2026-10-30, after real use began) | **Each friend can have a photo**, chosen by the owner; friends added from contacts bring their contact photo. See "Later requests". |
 
 ### Defaults chosen during planning (the owner approved the plan containing them)
 - **Adding friends:** an in-app contact importer (asks for contacts permission once; searchable,
@@ -57,3 +58,25 @@ App Icon: Something resembling Don Coreleone. The Godfather. A man in a tuxed/su
 - **Removing a friend** keeps their past calls in Statistics totals.
 - **No backups:** nothing leaves the phone (`allowBackup="false"`), as in Reevz Habitz.
 - **No per-friend call counts** anywhere (equal counts would reveal when a pass ends).
+
+## Later requests
+
+### 2026-10-30 — profile photos (D8)
+The owner, verbatim: "ok I added some friends. Is it not possible to put their profile pics as
+well? I want to be able to choose their profile pics. If I added them from contacts then that
+profile pic should also carry over."
+
+How it works (defaults chosen while building it):
+- **Choosing:** tap the photo on a friend's page, on Add Friend's form or in the Edit Friend
+  editor → *Choose photo* (the system photo picker, no permission needed) → frame the face in a
+  circle (drag, pinch to zoom) → *Use photo*. The same menu offers *Use contact photo* (the
+  phonebook's photo for that number, with contacts access) and *Remove photo*. On the friend's
+  page a change saves at once; in Add and Edit it goes with the form (Edit's discard guard covers
+  it).
+- **From contacts:** the importer copies each picked contact's photo. Friends added before this
+  existed get theirs from Settings › Contacts › *Photos from contacts* → Copy, which fills in only
+  friends without a photo, matched by number (the duplicate-number rule).
+- **Stored as a copy** in the app's private storage (small square JPEGs), so a photo stays if the
+  original or the contact changes, and — like everything else — never leaves the phone.
+- Photos show wherever a friend does: Home's cards, their page, the Edit/Remove lists; the
+  importer shows contacts' photos. A friend without one shows their initials.

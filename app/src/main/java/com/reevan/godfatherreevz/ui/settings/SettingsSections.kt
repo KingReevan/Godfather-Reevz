@@ -41,6 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -51,9 +52,13 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.reevan.godfatherreevz.GodfatherApplication
 import com.reevan.godfatherreevz.R
+import com.reevan.godfatherreevz.contacts.PhoneContacts
+import com.reevan.godfatherreevz.contacts.contactPhotoFor
 import com.reevan.godfatherreevz.data.GodfatherDatabase
+import com.reevan.godfatherreevz.photos.FriendPhotos
 import com.reevan.godfatherreevz.ui.common.LocalAppMessages
 import com.reevan.godfatherreevz.util.TodayClock
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -86,6 +91,50 @@ class ShuffleViewModel(private val application: GodfatherApplication) : ViewMode
     }
 }
 
+/** Settings > Contacts > Photos from contacts. */
+class ContactPhotosViewModel(private val application: GodfatherApplication) : ViewModel() {
+    private val friendDao = GodfatherDatabase.getInstance(application).friendDao()
+
+    var copying by mutableStateOf(false)
+        private set
+
+    /**
+     * Gives each friend without a photo a copy of their contact's, where the phonebook has one for
+     * their number. Friends who have a photo keep it. [onDone] gets how many got one.
+     */
+    fun copy(onDone: (Int) -> Unit) {
+        if (copying) return
+        copying = true
+        application.appScope.launch(Dispatchers.IO) {
+            val copied = runCatching { copyMissing() }.getOrDefault(0)
+            viewModelScope.launch {
+                copying = false
+                onDone(copied)
+            }
+        }
+    }
+
+    private suspend fun copyMissing(): Int {
+        val contacts = PhoneContacts.loadAll(application)
+        var copied = 0
+        for (friend in friendDao.getAll().filter { it.photo == null }) {
+            val contactPhoto = contactPhotoFor(friend.phone, contacts) ?: continue
+            val photo = FriendPhotos.copyContactPhoto(application, contactPhoto.toUri()) ?: continue
+            // Chosen one meanwhile? Theirs stays.
+            if (friendDao.setPhotoIfNone(friend.id, photo)) copied++ else FriendPhotos.delete(application, photo)
+        }
+        return copied
+    }
+
+    companion object {
+        val Factory: ViewModelProvider.Factory = viewModelFactory {
+            initializer {
+                ContactPhotosViewModel(this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as GodfatherApplication)
+            }
+        }
+    }
+}
+
 /** "Call directly" and the phone permission it needs. */
 @Composable
 internal fun CallingSection(callDirectly: Boolean, onCallDirectlyChange: (Boolean) -> Unit) {
@@ -110,14 +159,49 @@ internal fun CallingSection(callDirectly: Boolean, onCallDirectlyChange: (Boolea
     }
 }
 
+/** Contacts access, and copying contact photos to friends who have none. */
 @Composable
-internal fun ContactsSection() {
+internal fun ContactsSection(viewModel: ContactPhotosViewModel = viewModel(factory = ContactPhotosViewModel.Factory)) {
+    val context = LocalContext.current
+    val messages = LocalAppMessages.current
+    var allowed by remember { mutableStateOf(context.has(Manifest.permission.READ_CONTACTS)) }
+    LifecycleResumeEffect(Unit) {
+        allowed = context.has(Manifest.permission.READ_CONTACTS)
+        onPauseOrDispose {}
+    }
     PermissionRow(
         permission = Manifest.permission.READ_CONTACTS,
         title = "Contacts access",
-        grantedText = "Allowed — Add Friend can list your phonebook.",
+        grantedText = "Allowed — Add Friend can list your phonebook, photos included.",
         deniedText = "Not allowed — Add Friend uses the system contact picker.",
+        onChange = { allowed = it },
     )
+    SettingRow(
+        title = "Photos from contacts",
+        detail = if (allowed) {
+            "Friends without a photo get the one saved in your contacts."
+        } else {
+            "Needs contacts access."
+        },
+    ) {
+        FilledTonalButton(
+            onClick = {
+                viewModel.copy { copied ->
+                    messages.show(
+                        when (copied) {
+                            0 -> "No new photos found in your contacts"
+                            1 -> "1 photo added"
+                            else -> "$copied photos added"
+                        },
+                    )
+                }
+            },
+            enabled = allowed && !viewModel.copying,
+            modifier = Modifier.heightIn(min = 48.dp),
+        ) {
+            Text("Copy")
+        }
+    }
 }
 
 /** Shuffle again, behind a confirmation (the brief: "to prevent accidental shuffling"). */
@@ -214,7 +298,13 @@ private fun SettingRow(
  * whenever the screen comes back, since it can be changed there.
  */
 @Composable
-private fun PermissionRow(permission: String, title: String, grantedText: String, deniedText: String) {
+private fun PermissionRow(
+    permission: String,
+    title: String,
+    grantedText: String,
+    deniedText: String,
+    onChange: (Boolean) -> Unit = {},
+) {
     val context = LocalContext.current
     val activity = LocalActivity.current
     var granted by remember { mutableStateOf(context.has(permission)) }
@@ -225,6 +315,7 @@ private fun PermissionRow(permission: String, title: String, grantedText: String
     }
     val request = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         granted = ok
+        onChange(ok)
         if (!ok) blocked = activity == null || !ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)
     }
     SettingRow(title = title, detail = if (granted) grantedText else deniedText) {

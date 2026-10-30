@@ -25,12 +25,31 @@ data class ContactRow(
     val label: String = "",
     /** The contact's default number. */
     val primary: Boolean = false,
+    /** The contact's full-size photo (a contacts-provider URI), if they have one. */
+    val photo: String? = null,
+    /** A small version of [photo], for lists. */
+    val thumbnail: String? = null,
 )
 
 data class ContactNumber(val number: String, val label: String)
 
 /** A phonebook contact with at least one number; the first number is the one to suggest. */
-data class PhoneContact(val key: String, val name: String, val numbers: List<ContactNumber>)
+data class PhoneContact(
+    val key: String,
+    val name: String,
+    val numbers: List<ContactNumber>,
+    val photo: String? = null,
+    val thumbnail: String? = null,
+)
+
+/**
+ * The photo of the contact with [phone]'s number (by [PhoneNumbers.sameNumber], the rule that
+ * spots duplicates), or null if no contact with a photo has it.
+ */
+fun contactPhotoFor(phone: String, contacts: List<PhoneContact>): String? =
+    contacts.firstOrNull { contact ->
+        contact.photo != null && contact.numbers.any { PhoneNumbers.sameNumber(it.number, phone) }
+    }?.photo
 
 /**
  * Groups provider rows into contacts: one per key, numbers that reach the same phone merged (the
@@ -53,6 +72,8 @@ fun groupContacts(rows: List<ContactRow>, collator: Collator = Collator.getInsta
                 key = key,
                 name = name,
                 numbers = distinct.map { ContactNumber(PhoneNumbers.clean(it.number), it.label) },
+                photo = numbers.firstNotNullOfOrNull { it.photo },
+                thumbnail = numbers.firstNotNullOfOrNull { it.thumbnail },
             )
         }
         .sortedWith(compareBy(collator) { it.name })
@@ -73,6 +94,8 @@ object PhoneContacts {
             Phone.TYPE,
             Phone.LABEL,
             Phone.IS_SUPER_PRIMARY,
+            Phone.PHOTO_URI,
+            Phone.PHOTO_THUMBNAIL_URI,
         )
         val rows = mutableListOf<ContactRow>()
         context.contentResolver.query(Phone.CONTENT_URI, projection, null, null, null)?.use { cursor ->
@@ -84,11 +107,20 @@ object PhoneContacts {
                     number = cursor.string(Phone.NUMBER).orEmpty(),
                     label = Phone.getTypeLabel(context.resources, type, cursor.string(Phone.LABEL)).toString(),
                     primary = cursor.int(Phone.IS_SUPER_PRIMARY) != 0,
+                    photo = cursor.string(Phone.PHOTO_URI),
+                    thumbnail = cursor.string(Phone.PHOTO_THUMBNAIL_URI),
                 )
             }
         }
         return groupContacts(rows)
     }
+
+    /**
+     * The phonebook photo for [phone]'s number ([contactPhotoFor]); null if there's none, or no
+     * contacts access. Call off the main thread.
+     */
+    fun photoFor(context: Context, phone: String): String? =
+        if (hasPermission(context)) contactPhotoFor(phone, loadAll(context)) else null
 
     /**
      * The system contact picker, which needs no permission (the fallback when READ_CONTACTS is
@@ -131,14 +163,17 @@ object PhoneContacts {
                 }
             }
         } else {
-            // The classic picker: a single phone-number data row.
-            context.contentResolver.query(uri, arrayOf(Phone.DISPLAY_NAME, Phone.NUMBER), null, null, null)
+            // The classic picker: a single phone-number data row. Its photo can usually only be
+            // read with contacts access — the grant covers just this row — so it is a bonus.
+            val projection = arrayOf(Phone.DISPLAY_NAME, Phone.NUMBER, Phone.PHOTO_URI)
+            context.contentResolver.query(uri, projection, null, null, null)
                 ?.use { cursor ->
                     if (cursor.moveToFirst()) {
                         rows += ContactRow(
                             key = uri.toString(),
                             name = cursor.string(Phone.DISPLAY_NAME).orEmpty(),
                             number = cursor.string(Phone.NUMBER).orEmpty(),
+                            photo = cursor.string(Phone.PHOTO_URI),
                         )
                     }
                 }

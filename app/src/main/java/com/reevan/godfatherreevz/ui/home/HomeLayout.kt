@@ -5,7 +5,7 @@ import com.reevan.godfatherreevz.data.FriendWithLastCall
 import java.time.LocalDate
 
 /** A faded card above today's: a recent call, dated. */
-data class PastItem(val friendId: Long, val name: String, val date: LocalDate)
+data class PastItem(val friendId: Long, val name: String, val date: LocalDate, val photo: String? = null)
 
 /**
  * Today's card. [friendId] is null only when today's call was made to a friend who has since been
@@ -17,10 +17,11 @@ data class TodayItem(
     val phone: String?,
     val lastCalled: LocalDate?,
     val done: Boolean,
+    val photo: String? = null,
 )
 
 /** Everyone else, in the order they come up. */
-data class UpcomingItem(val friendId: Long, val name: String, val lastCalled: LocalDate?)
+data class UpcomingItem(val friendId: Long, val name: String, val lastCalled: LocalDate?, val photo: String? = null)
 
 /** Home's focus stack, top to bottom: past calls, today's friend, everyone else. */
 data class HomeState(
@@ -61,21 +62,22 @@ fun buildHome(
                 phone = friend?.friend?.phone,
                 lastCalled = friend?.lastCalled ?: scheduledToday.date,
                 done = true,
+                photo = friend?.friend?.photo,
             )
         }
         friends.isNotEmpty() -> friends.first().let {
-            TodayItem(it.friend.id, it.friend.name, it.friend.phone, it.lastCalled, done = false)
+            TodayItem(it.friend.id, it.friend.name, it.friend.phone, it.lastCalled, done = false, photo = it.friend.photo)
         }
         else -> null
     }
     val upcoming = friends
         .filter { it.friend.id != today?.friendId }
-        .map { UpcomingItem(it.friend.id, it.friend.name, it.lastCalled) }
+        .map { UpcomingItem(it.friend.id, it.friend.name, it.lastCalled, it.friend.photo) }
     val past = recentCalls
         .filter { call -> call.friendId != null && call.friendId in byId && call.friendId != today?.friendId }
         .distinctBy { it.friendId }
         .take(PAST_CARDS)
-        .map { PastItem(it.friendId!!, byId.getValue(it.friendId).friend.name, it.date) }
+        .map { call -> byId.getValue(call.friendId!!).friend.let { PastItem(it.id, it.name, call.date, it.photo) } }
         .reversed()
     return HomeState(past = past, today = today, upcoming = upcoming)
 }

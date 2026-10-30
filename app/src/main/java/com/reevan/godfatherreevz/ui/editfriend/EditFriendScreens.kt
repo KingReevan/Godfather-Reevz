@@ -20,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
@@ -40,6 +41,7 @@ import com.reevan.godfatherreevz.ui.friendform.FriendPhoneField
 import com.reevan.godfatherreevz.ui.navigation.Destination
 import com.reevan.godfatherreevz.ui.navigation.InterceptLeaving
 import com.reevan.godfatherreevz.ui.navigation.LeaveGuard
+import com.reevan.godfatherreevz.ui.photo.EditablePhoto
 
 /** Edit Friend: every friend A–Z, searchable; tapping one opens the editor. */
 @Composable
@@ -79,7 +81,7 @@ fun EditFriendListScreen(
 }
 
 /**
- * The editor for one friend's name and number. Save is enabled only for a real, valid change.
+ * The editor for one friend's photo, name and number. Save is enabled only for a real, valid change.
  * Leaving with unsaved changes — system back, the header arrow, a breadcrumb, or the header's
  * Settings/Menu buttons — asks "Discard changes?" first and then goes exactly where the owner
  * was heading.
@@ -99,6 +101,8 @@ fun EditFriendScreen(
     var original by remember { mutableStateOf<Friend?>(null) }
     val name = rememberTextFieldState()
     val phone = rememberTextFieldState()
+    // The photo on the form: the stored one, or one just chosen (a saved file, unused until Save).
+    var photo by rememberSaveable { mutableStateOf<String?>(null) }
     var filled by rememberSaveable { mutableStateOf(false) }
     // Where the owner tried to go with unsaved changes, while "Discard changes?" is up. Saved as
     // routes, so after a rotation Discard still lands on the screen they chose.
@@ -118,13 +122,14 @@ fun EditFriendScreen(
         if (!filled) {
             name.setTextAndPlaceCursorAtEnd(friend.name)
             phone.setTextAndPlaceCursorAtEnd(friend.phone)
+            photo = friend.photo
             filled = true
         }
         original = friend
     }
 
     val stored = original ?: return
-    val draft = FriendDraft(name.text.toString(), phone.text.toString())
+    val draft = FriendDraft(name.text.toString(), phone.text.toString(), photo)
     val changed = draft.changes(stored)
     val check = draft.check(friends.orEmpty(), exceptId = stored.id)
 
@@ -135,9 +140,18 @@ fun EditFriendScreen(
     FriendFormScaffold(
         actionLabel = "Save",
         actionEnabled = changed && check.canSave && friends != null && !saving.inProgress,
-        onAction = { saving.start()?.let { viewModel.save(it, stored.id, draft.toNewFriend()) } },
+        onAction = { saving.start()?.let { viewModel.save(it, stored, draft.toNewFriend()) } },
         modifier = modifier,
     ) {
+        EditablePhoto(
+            owner = "edit-${stored.id}",
+            name = draft.name,
+            photo = photo,
+            phone = draft.phone,
+            onChange = { photo = it },
+            size = 88,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
         FriendNameField(state = name)
         FriendPhoneField(state = phone, error = check.phoneError)
         Text(

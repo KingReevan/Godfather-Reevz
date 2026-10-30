@@ -6,6 +6,7 @@ import com.reevan.godfatherreevz.GodfatherApplication
 import com.reevan.godfatherreevz.data.Friend
 import com.reevan.godfatherreevz.data.GodfatherDatabase
 import com.reevan.godfatherreevz.data.TodayWindow
+import com.reevan.godfatherreevz.photos.FriendPhotos
 import com.reevan.godfatherreevz.util.TodayClock
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -99,5 +100,13 @@ class FriendDetailsViewModel(
 
     fun saveNotes(notes: String) {
         application.appScope.launch { friendDao.updateNotes(friendId, notes) }
+    }
+
+    /** Sets this friend's photo (null removes it); the file it replaces is deleted. */
+    fun setPhoto(photo: String?) {
+        application.appScope.launch {
+            val old = friendDao.replacePhoto(friendId, photo)
+            if (old != photo) FriendPhotos.delete(application, old)
+        }
     }
 }

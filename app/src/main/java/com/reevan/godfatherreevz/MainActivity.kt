@@ -17,6 +17,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.reevan.godfatherreevz.ui.GodfatherApp
+import com.reevan.godfatherreevz.ui.photo.LocalPhotoPicker
 import com.reevan.godfatherreevz.ui.settings.PreferencesViewModel
 import com.reevan.godfatherreevz.ui.theme.GodfatherReevzTheme
 import com.reevan.godfatherreevz.util.LocalCaller
@@ -61,7 +62,11 @@ class MainActivity : ComponentActivity() {
             }
 
             GodfatherReevzTheme(theme = theme) {
-                CompositionLocalProvider(LocalCaller provides (application as GodfatherApplication).caller) {
+                val app = application as GodfatherApplication
+                CompositionLocalProvider(
+                    LocalCaller provides app.caller,
+                    LocalPhotoPicker provides app.photoPicker,
+                ) {
                     GodfatherApp()
                 }
             }

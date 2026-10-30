@@ -40,6 +40,8 @@ ICONS = [
     ("streak", "local_fire_department", True),
     ("group", "group", True),
     ("hourglass", "hourglass_bottom", True),
+    ("add_photo", "add_a_photo", True),
+    ("delete", "delete", True),
 ]
 
 

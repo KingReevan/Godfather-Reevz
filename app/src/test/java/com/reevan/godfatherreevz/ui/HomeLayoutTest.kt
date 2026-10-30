@@ -95,4 +95,19 @@ class HomeLayoutTest {
         assertEquals(friends.map { it.friend.id }.toSet(), shown.toSet())
         assertEquals(friends.size, shown.size)
     }
+
+    @Test
+    fun `every card shows its friend's photo`() {
+        fun withPhoto(id: Long, lastCalled: LocalDate? = null) =
+            friend(id, lastCalled).let { it.copy(friend = it.friend.copy(photo = "p$id.jpg")) }
+        val friends = listOf(withPhoto(1), withPhoto(2, day(-1)), friend(3))
+        val home = buildHome(friends, listOf(call(2, day(-1))), null)
+        assertEquals("p1.jpg", home.today!!.photo)
+        assertEquals(listOf("p2.jpg", null), home.upcoming.map { it.photo })
+        assertEquals(listOf("p2.jpg"), home.past.map { it.photo })
+
+        // Today's call made to a friend since removed: their saved name, and no photo.
+        val gone = buildHome(friends, emptyList(), call(99, today))
+        assertNull(gone.today!!.photo)
+    }
 }

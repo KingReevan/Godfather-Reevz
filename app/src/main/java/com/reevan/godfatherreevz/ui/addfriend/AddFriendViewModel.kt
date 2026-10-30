@@ -2,6 +2,7 @@ package com.reevan.godfatherreevz.ui.addfriend
 
 import android.app.Application
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -11,13 +12,16 @@ import com.reevan.godfatherreevz.data.Friend
 import com.reevan.godfatherreevz.data.FriendDao
 import com.reevan.godfatherreevz.data.GodfatherDatabase
 import com.reevan.godfatherreevz.data.NewFriend
+import com.reevan.godfatherreevz.photos.FriendPhotos
 import com.reevan.godfatherreevz.ui.common.SubmissionTracker
 import com.reevan.godfatherreevz.util.PhoneNumbers
 import com.reevan.godfatherreevz.util.TodayClock
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 /** What one add did: who went in, and how many were skipped as already saved. */
@@ -55,8 +59,14 @@ fun planAdd(candidates: List<NewFriend>, existing: List<Friend>): Pair<List<NewF
     return toAdd to skipped
 }
 
+/** A friend picked from the phonebook, with their contact photo (a contacts-provider URI), if any. */
+data class ContactPick(val friend: NewFriend, val contactPhoto: String?)
+
 /** Adds friends — typed in, picked from the importer, or from the system picker. */
-class AddFriendViewModel(private val friendDao: FriendDao) : ViewModel() {
+class AddFriendViewModel(
+    private val application: Application,
+    private val friendDao: FriendDao,
+) : ViewModel() {
 
     /** Every saved friend, A–Z, for the duplicate checks; null until loaded. */
     val friends: StateFlow<List<Friend>?> = friendDao.observeAlphabetical()
@@ -71,12 +81,31 @@ class AddFriendViewModel(private val friendDao: FriendDao) : ViewModel() {
      * Adds [candidates], skipping numbers already saved (re-checked here against the database, not
      * the screen's copy). Each new friend is shuffled into the rotation by the new-friend rule.
      */
-    fun add(token: String, candidates: List<NewFriend>) {
+    fun add(token: String, candidates: List<NewFriend>) = addPicks(token, candidates.map { ContactPick(it, null) })
+
+    /**
+     * Adds friends picked from the phonebook, as [add] does — each with a copy of their contact
+     * photo, so it carries over.
+     */
+    fun addPicks(token: String, picks: List<ContactPick>) {
         viewModelScope.launch {
-            val (toAdd, skipped) = planAdd(candidates, friendDao.getAll())
+            val (toAdd, skipped) = planAdd(picks.map { it.friend }, friendDao.getAll())
             if (toAdd.isNotEmpty()) {
+                val contactPhotos = picks.associate { it.friend to it.contactPhoto }
+                val withPhotos = withContext(Dispatchers.IO) {
+                    toAdd.map { friend ->
+                        val contactPhoto = contactPhotos[friend]
+                        if (friend.photo != null || contactPhoto == null) {
+                            friend
+                        } else {
+                            // Without contacts access (the system picker) it usually can't be read.
+                            val copy = runCatching { FriendPhotos.copyContactPhoto(application, contactPhoto.toUri()) }
+                            friend.copy(photo = copy.getOrNull())
+                        }
+                    }
+                }
                 friendDao.addFriends(
-                    friends = toAdd,
+                    friends = withPhotos,
                     today = TodayClock.instance.today.value,
                     createdAt = System.currentTimeMillis(),
                     random = Random.Default,
@@ -92,7 +121,7 @@ class AddFriendViewModel(private val friendDao: FriendDao) : ViewModel() {
             initializer {
                 val application =
                     this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as Application
-                AddFriendViewModel(GodfatherDatabase.getInstance(application).friendDao())
+                AddFriendViewModel(application, GodfatherDatabase.getInstance(application).friendDao())
             }
         }
     }

@@ -51,4 +51,35 @@ class GroupContactsTest {
         )
         assertEquals(listOf("+1 555 0100"), contacts.map { it.name })
     }
+
+    @Test
+    fun `a contact keeps their photo`() {
+        val contact = groupContacts(
+            listOf(
+                ContactRow("m", "Marco Rossi", "98765 43210", photo = "content://photo/1", thumbnail = "content://thumb/1"),
+                ContactRow("m", "Marco Rossi", "+91 22 2345 6789"),
+            ),
+            collator,
+        ).single()
+        assertEquals("content://photo/1", contact.photo)
+        assertEquals("content://thumb/1", contact.thumbnail)
+    }
+
+    @Test
+    fun `a friend's contact photo is found by their number, however it is written`() {
+        val contacts = groupContacts(
+            listOf(
+                ContactRow("a", "Ana", "+91 98765 43210"),
+                ContactRow("m", "Marco", "+91 22 2345 6789", photo = "content://photo/m"),
+                ContactRow("m", "Marco", "098765 11111", photo = "content://photo/m"),
+                ContactRow("n", "Neha", "98200 11122", photo = "content://photo/n"),
+            ),
+            collator,
+        )
+        assertEquals("content://photo/m", contactPhotoFor("+91 98765 11111", contacts))
+        assertEquals("content://photo/n", contactPhotoFor("+919820011122", contacts))
+        // Ana is in the phonebook, but without a photo; nobody has this other number.
+        assertEquals(null, contactPhotoFor("98765 43210", contacts))
+        assertEquals(null, contactPhotoFor("90000 00000", contacts))
+    }
 }

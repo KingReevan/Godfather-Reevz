@@ -39,6 +39,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.reevan.godfatherreevz.data.Friend
 import com.reevan.godfatherreevz.data.FriendDao
 import com.reevan.godfatherreevz.data.GodfatherDatabase
+import com.reevan.godfatherreevz.photos.FriendPhotos
 import com.reevan.godfatherreevz.ui.common.FriendRow
 import com.reevan.godfatherreevz.ui.common.FriendSearchField
 import com.reevan.godfatherreevz.ui.common.ListMessage
@@ -51,17 +52,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class RemoveFriendViewModel(private val friendDao: FriendDao) : ViewModel() {
+class RemoveFriendViewModel(
+    private val application: Application,
+    private val friendDao: FriendDao,
+) : ViewModel() {
 
     val friends: StateFlow<List<Friend>?> = friendDao.observeAlphabetical()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val submissions = SubmissionTracker()
 
-    /** Removes [ids]; their past calls stay in Statistics (FriendDao.removeFriends). */
+    /** Removes [ids], photos and all; their past calls stay in Statistics (FriendDao.removeFriends). */
     fun remove(token: String, ids: List<Long>) {
         viewModelScope.launch {
-            friendDao.removeFriends(ids)
+            friendDao.removeFriends(ids).forEach { FriendPhotos.delete(application, it) }
             submissions.complete(token)
         }
     }
@@ -71,7 +75,7 @@ class RemoveFriendViewModel(private val friendDao: FriendDao) : ViewModel() {
             initializer {
                 val application =
                     this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as Application
-                RemoveFriendViewModel(GodfatherDatabase.getInstance(application).friendDao())
+                RemoveFriendViewModel(application, GodfatherDatabase.getInstance(application).friendDao())
             }
         }
     }
@@ -161,7 +165,7 @@ fun RemoveFriendScreen(
             text = {
                 Text(
                     (if (names.size in 2..5) names.joinToString(", ") + ".\n\n" else "") +
-                        "Their notes go with them. Past calls stay in Statistics.",
+                        "Their notes and photos go with them. Past calls stay in Statistics.",
                 )
             },
             confirmButton = {

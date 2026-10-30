@@ -8,13 +8,17 @@ import com.reevan.godfatherreevz.util.capitalizeWords
 /** Longest name accepted, in characters: room for a full name, short enough for a card. */
 const val MAX_NAME_LENGTH = 60
 
-/** A friend being typed into Add Friend or the Edit Friend editor. */
-data class FriendDraft(val name: String, val phone: String) {
+/**
+ * A friend being typed into Add Friend or the Edit Friend editor. [photo] is the photo file chosen
+ * on the form (already saved), or null for none.
+ */
+data class FriendDraft(val name: String, val phone: String, val photo: String? = null) {
 
     /** As it will be saved: words capitalised, whitespace tidied; number trimmed. */
     fun toNewFriend(): NewFriend = NewFriend(
         name = capitalizeWords(name.trim().replace(Regex("\\s+"), " ")),
         phone = PhoneNumbers.clean(phone),
+        photo = photo,
     )
 
     /**
@@ -22,7 +26,7 @@ data class FriendDraft(val name: String, val phone: String) {
      * trailing space, or lower-casing a letter the save capitalises anyway, is no change).
      */
     fun changes(original: Friend): Boolean =
-        toNewFriend().let { it.name != original.name || it.phone != original.phone }
+        toNewFriend().let { it.name != original.name || it.phone != original.phone || it.photo != original.photo }
 
     /**
      * Whether this can be saved, and what to tell the user. [existing] are the friends already

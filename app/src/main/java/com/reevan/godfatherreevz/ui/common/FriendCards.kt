@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +55,7 @@ import java.time.LocalDate
  * - TodayCard: today's friend, larger, in the theme's gradient, "highlighted and in focus".
  * - FriendCard: everyone else, in upcoming order, with their last-called date or "-".
  * - PastCard: the faded record of a recent call, with that call's date.
+ * Each shows the friend's photo, or their initials when they have none.
  */
 
 private val CardShape = RoundedCornerShape(18.dp)
@@ -65,6 +67,7 @@ private val CardShape = RoundedCornerShape(18.dp)
 @Composable
 fun TodayCard(
     name: String,
+    photo: String?,
     phone: String?,
     lastCalled: LocalDate?,
     done: Boolean,
@@ -100,34 +103,36 @@ fun TodayCard(
                 )
                 Spacer(Modifier.heightIn(min = 14.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (!done) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_call),
-                            contentDescription = null,
-                            tint = colors.onFocus,
-                            modifier = Modifier.size(26.dp),
+                    FriendAvatar(
+                        name = name,
+                        photo = photo,
+                        size = 72,
+                        container = colors.onFocus,
+                        content = colors.focusStart,
+                        modifier = Modifier.border(2.dp, colors.onFocus, CircleShape),
+                    )
+                    Spacer(Modifier.width(16.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontFamily = GodfatherTheme.displayFont,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.onFocus,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                        Spacer(Modifier.width(10.dp))
+                        if (phone != null) {
+                            Text(
+                                text = phone,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.onFocus,
+                                modifier = Modifier
+                                    .padding(top = 4.dp)
+                                    .alpha(0.85f),
+                            )
+                        }
                     }
-                    Text(
-                        text = name,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontFamily = GodfatherTheme.displayFont,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.onFocus,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (phone != null) {
-                    Text(
-                        text = phone,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.onFocus,
-                        modifier = Modifier
-                            .padding(top = 4.dp)
-                            .alpha(0.85f),
-                    )
                 }
                 Spacer(Modifier.heightIn(min = 18.dp))
                 Text(
@@ -167,6 +172,7 @@ fun TodayCard(
 @Composable
 fun FriendCard(
     name: String,
+    photo: String?,
     lastCalled: LocalDate?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -188,7 +194,7 @@ fun FriendCard(
                 .heightIn(min = 76.dp)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
-            Initials(name)
+            FriendAvatar(name, photo)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 if (label != null) {
@@ -227,6 +233,7 @@ fun FriendCard(
 @Composable
 fun PastCard(
     name: String,
+    photo: String?,
     date: LocalDate,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -246,11 +253,7 @@ fun PastCard(
                 .heightIn(min = 56.dp)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_check),
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
+            FriendAvatar(name, photo, size = 32)
             Spacer(Modifier.width(10.dp))
             Text(
                 text = name,
@@ -261,24 +264,39 @@ fun PastCard(
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(8.dp))
-            Text(
-                text = dateLabel,
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier
-                    .align(Alignment.Bottom)
-                    .semantics { contentDescription = "Called $dateLabel" },
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.align(Alignment.Bottom),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_check),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = dateLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.semantics { contentDescription = "Called $dateLabel" },
+                )
+            }
         }
     }
 }
 
-/** A round badge with the friend's initials. */
+/** A round badge with the friend's initials — their avatar when they have no photo. */
 @Composable
-fun Initials(name: String, modifier: Modifier = Modifier, size: Int = 44) {
+fun Initials(
+    name: String,
+    modifier: Modifier = Modifier,
+    size: Int = 44,
+    container: Color = MaterialTheme.colorScheme.primaryContainer,
+    content: Color = MaterialTheme.colorScheme.onPrimaryContainer,
+) {
     Surface(
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        color = container,
+        contentColor = content,
         modifier = modifier.size(size.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
@@ -323,10 +341,10 @@ private fun CardsPreview() {
     GodfatherReevzTheme {
         Surface {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                PastCard("Neha Joseph", LocalDate.of(2026, 10, 27), onClick = {})
-                TodayCard("Marco Rossi", "+91 98765 43210", null, done = false, onClick = {})
-                FriendCard("Aditya Kumar", null, onClick = {}, label = "Up next")
-                FriendCard("Priya Sharma", LocalDate.of(2026, 9, 3), onClick = {})
+                PastCard("Neha Joseph", null, LocalDate.of(2026, 10, 27), onClick = {})
+                TodayCard("Marco Rossi", null, "+91 98765 43210", null, done = false, onClick = {})
+                FriendCard("Aditya Kumar", null, null, onClick = {}, label = "Up next")
+                FriendCard("Priya Sharma", null, LocalDate.of(2026, 9, 3), onClick = {})
             }
         }
     }
@@ -338,8 +356,8 @@ private fun CardsNoirPreview() {
     GodfatherReevzTheme(AppTheme.CORLEONE_NOIR) {
         Surface {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                TodayCard("Marco Rossi", "+91 98765 43210", LocalDate.of(2026, 10, 30), done = true, onClick = {})
-                FriendCard("Aditya Kumar", null, onClick = {})
+                TodayCard("Marco Rossi", null, "+91 98765 43210", LocalDate.of(2026, 10, 30), done = true, onClick = {})
+                FriendCard("Aditya Kumar", null, null, onClick = {})
             }
         }
     }
@@ -351,8 +369,8 @@ private fun CardsNothingPreview() {
     GodfatherReevzTheme(AppTheme.NOTHING) {
         Surface {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                TodayCard("Marco Rossi", "+91 98765 43210", null, done = false, onClick = {})
-                FriendCard("Aditya Kumar", LocalDate.of(2026, 9, 3), onClick = {}, label = "Up next")
+                TodayCard("Marco Rossi", null, "+91 98765 43210", null, done = false, onClick = {})
+                FriendCard("Aditya Kumar", null, LocalDate.of(2026, 9, 3), onClick = {}, label = "Up next")
             }
         }
     }

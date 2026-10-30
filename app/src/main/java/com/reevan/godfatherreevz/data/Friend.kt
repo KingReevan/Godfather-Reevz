@@ -32,6 +32,11 @@ data class Friend(
     val createdAt: Long,
     val position: Int,
     val turnUsed: Boolean = false,
+    /**
+     * The friend's photo: a file name in the app's private photos folder (`photos/FriendPhotos`),
+     * or null for none. Added in schema v2.
+     */
+    val photo: String? = null,
 )
 
 /** A friend plus the date of their most recent call, or null if never called. */
