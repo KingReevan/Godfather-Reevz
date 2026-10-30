@@ -62,15 +62,25 @@ class Submission internal constructor(
  * **Call it before any early return in the screen.** The write itself can trigger one — removing
  * the last friend empties Remove Friend's list — and if this isn't composed at that moment, it
  * never sees the write finish, and the screen never leaves.
+ *
+ * [repeatable]: for a screen that stays open after its action (Add Friend adds one friend after
+ * another) — once [onFinished] has run, the action is ready to start again.
  */
 @Composable
-fun rememberSubmission(tracker: SubmissionTracker, onFinished: () -> Unit): Submission {
+fun rememberSubmission(
+    tracker: SubmissionTracker,
+    repeatable: Boolean = false,
+    onFinished: () -> Unit,
+): Submission {
     var token by rememberSaveable { mutableStateOf<String?>(null) }
     val currentOnFinished by rememberUpdatedState(onFinished)
 
     val current = token
     if (current != null && tracker.isFinished(current)) {
-        LaunchedEffect(current) { currentOnFinished() }
+        LaunchedEffect(current) {
+            currentOnFinished()
+            if (repeatable) token = null
+        }
     }
     return Submission(inProgress = current != null) {
         if (token != null) {

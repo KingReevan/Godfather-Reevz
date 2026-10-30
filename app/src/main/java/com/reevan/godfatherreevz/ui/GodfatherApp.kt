@@ -6,18 +6,27 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.reevan.godfatherreevz.ui.addfriend.AddFriendScreen
+import com.reevan.godfatherreevz.ui.common.AppMessages
 import com.reevan.godfatherreevz.ui.common.BreadcrumbHeader
 import com.reevan.godfatherreevz.ui.common.ComingSoon
 import com.reevan.godfatherreevz.ui.common.HeaderActions
 import com.reevan.godfatherreevz.ui.common.HomeHeader
+import com.reevan.godfatherreevz.ui.common.LocalAppMessages
+import com.reevan.godfatherreevz.ui.contactpicker.ContactImportScreen
 import com.reevan.godfatherreevz.ui.menu.MenuScreen
 import com.reevan.godfatherreevz.ui.navigation.BackStackSaver
 import com.reevan.godfatherreevz.ui.navigation.Destination
@@ -26,6 +35,7 @@ import com.reevan.godfatherreevz.ui.navigation.LeaveGuard
 import com.reevan.godfatherreevz.ui.navigation.breadcrumbs
 import com.reevan.godfatherreevz.ui.navigation.jumpTo
 import com.reevan.godfatherreevz.ui.navigation.pop
+import com.reevan.godfatherreevz.ui.navigation.popIfCurrent
 import com.reevan.godfatherreevz.ui.navigation.popTo
 import com.reevan.godfatherreevz.ui.navigation.pushFrom
 import com.reevan.godfatherreevz.ui.settings.SettingsScreen
@@ -61,7 +71,17 @@ fun GodfatherApp() {
         if (target != backStack && !leaveGuard.intercepts(target)) backStack = target
     }
 
+    // A screen finishing its own job goes back to where it came from — but only if it is still on
+    // top, so a breadcrumb tapped while it saved is never overruled.
+    val finish: (Destination) -> () -> Unit = { screen ->
+        { backStack = backStack.popIfCurrent(screen) }
+    }
+
     BackHandler(enabled = backStack.size > 1) { leaveTo(backStack.pop()) }
+
+    val snackbarHost = remember { SnackbarHostState() }
+    val shellScope = rememberCoroutineScope()
+    val messages = remember(snackbarHost, shellScope) { AppMessages(snackbarHost, shellScope) }
 
     val actions: @Composable () -> Unit = {
         HeaderActions(
@@ -70,8 +90,12 @@ fun GodfatherApp() {
         )
     }
 
+    CompositionLocalProvider(LocalAppMessages provides messages) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        // Lifted above the bottom action bar most screens have (Add, Call, Remove...), so a
+        // message never covers the button the owner is about to tap again.
+        snackbarHost = { SnackbarHost(snackbarHost, Modifier.padding(bottom = 76.dp)) },
         topBar = {
             if (current == Destination.Home) {
                 HomeHeader(date = formatHeaderDate(today)) { actions() }
@@ -96,8 +120,15 @@ fun GodfatherApp() {
                 Destination.Home -> ComingSoon("Home", phase = 4)
                 Destination.Menu -> MenuScreen(onOpen = navigate)
                 Destination.Settings -> SettingsScreen()
-                Destination.AddFriend -> ComingSoon("Add Friend", phase = 3)
-                Destination.ContactImport -> ComingSoon("Contacts", phase = 3)
+                Destination.AddFriend -> AddFriendScreen(
+                    onOpenContacts = { navigate(Destination.ContactImport) },
+                )
+                // Friends picked in bulk: straight Home, where they now appear in the stack.
+                Destination.ContactImport -> ContactImportScreen(
+                    onDone = {
+                        if (backStack.lastOrNull() == Destination.ContactImport) backStack = InitialBackStack
+                    },
+                )
                 Destination.EditFriendList -> ComingSoon("Edit Friend", phase = 5)
                 Destination.RemoveFriend -> ComingSoon("Remove Friend", phase = 5)
                 Destination.Statistics -> ComingSoon("Statistics", phase = 6)
@@ -105,5 +136,6 @@ fun GodfatherApp() {
                 is Destination.EditFriend -> ComingSoon("Edit", phase = 5)
             }
         }
+    }
     }
 }

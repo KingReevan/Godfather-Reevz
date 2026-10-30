@@ -119,8 +119,8 @@ adb lives in `%LOCALAPPDATA%\Android\Sdk\platform-tools` (not on PATH).
 
 ## Current project state
 
-Phases 1–2 of `docs/PLAN.md` are done (foundations, look & feel); later phases fill in the
-placeholder screens (`ui/common/ComingSoon`).
+Phases 1–3 of `docs/PLAN.md` are done (foundations, look & feel, Add Friend); later phases fill
+in the placeholder screens (`ui/common/ComingSoon`).
 
 - `data/` — Room schema v1: `friends` (position/turnUsed rotation columns, notes), `calls` (one row
   per friend per day pressed; `scheduled`, `consumedTurn`; FK `SET NULL` on removal),
@@ -147,6 +147,25 @@ placeholder screens (`ui/common/ComingSoon`).
 - `ui/settings/SettingsScreen` — theme picker (radio rows with a swatch, each name in its own
   display font).
 - `GodfatherApplication.appScope` — for writes that must outlive the screen (recording a call).
+- `ui/common/AppMessages` (`LocalAppMessages`) — the app-wide snackbar, owned by the shell so a
+  message survives the screen closing; lifted 76dp so it never covers a bottom action button.
+- `ui/common/Submission` — as in Habitz, plus `repeatable = true` for screens that stay open after
+  their action (Add Friend).
+- `ui/friendform/` — `FriendDraft` (pure: validation, duplicate check by `PhoneNumbers.sameNumber`,
+  tidy save), `FriendFormScaffold`, `FriendNameField` (display-only capitalisation, as in Habitz),
+  `FriendPhoneField`. Shared by Add and (phase 5) Edit.
+- `ui/addfriend/` — Add Friend: "Choose from contacts" card + manual form; adding clears the form
+  and stays. `AddFriendViewModel.add` re-checks duplicates against the database (`planAdd`, pure)
+  and returns an `AddResult` message ("5 friends added · 1 already saved").
+- `contacts/PhoneContacts` — reads the phonebook (READ_CONTACTS), `groupContacts` (pure: one per
+  contact, same-number duplicates merged, default number first, locale A–Z), the system picker
+  intent (API 37+: `ContactsPickerSessionContract.ACTION_PICK_CONTACTS` multi-select; older:
+  `ACTION_PICK` on phone numbers) and reading its result URI.
+- `ui/contactpicker/` — the importer: permission prompt (explanation → request; refused twice →
+  Open settings; always offers the system picker), searchable A–Z list with sticky letters,
+  checkboxes, number choice for multi-number contacts, already-saved contacts disabled. "Add N
+  friends" returns Home. System-picker picks are added at once. The API 37 picker branch has not
+  been run on a device (the phone is API 36).
 
 Generated assets — edit the script, not the output (licences in `docs/THIRD_PARTY.md`):
 - `tools/fetch_icons.py` → `res/drawable/ic_*.xml` (Material Symbols Rounded, Apache 2.0).
