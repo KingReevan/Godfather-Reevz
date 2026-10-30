@@ -119,7 +119,8 @@ adb lives in `%LOCALAPPDATA%\Android\Sdk\platform-tools` (not on PATH).
 
 ## Current project state
 
-Phase 1 of `docs/PLAN.md` is done (foundations); later phases fill in the placeholder screens.
+Phases 1–2 of `docs/PLAN.md` are done (foundations, look & feel); later phases fill in the
+placeholder screens (`ui/common/ComingSoon`).
 
 - `data/` — Room schema v1: `friends` (position/turnUsed rotation columns, notes), `calls` (one row
   per friend per day pressed; `scheduled`, `consumedTurn`; FK `SET NULL` on removal),
@@ -135,6 +136,22 @@ Phase 1 of `docs/PLAN.md` is done (foundations); later phases fill in the placeh
   (Settings + Menu, on every screen).
 - `ui/menu/MenuScreen` — the four Menu buttons, game-menu style.
 - `ui/theme/` — six fixed themes (`AppTheme`: Sicilian Sunset default, Sunset After Dark, Corleone
-  Noir, Limoncello, Amalfi Coast, Nothing); `GodfatherTheme.colors` / `.displayFont`.
+  Noir, Limoncello, Amalfi Coast, Nothing); `GodfatherTheme.colors` (today's-card gradient, past
+  cards, called mark) / `.displayFont`. Contrast for every theme is pinned by `ThemeColorsTest` —
+  run it after touching any colour. Fonts are bundled variable TTFs read through
+  `FontVariation` (experimental API, opted in): Playfair Display, and Doto for Nothing — Doto's
+  weight axis is its dot size, so each weight reads +200 further along it.
+- `ui/common/FriendCards` — `TodayCard` (gradient, pulsing ring until called), `FriendCard`
+  (upcoming; optional "Up next" chip), `PastCard` (faded recent call), `Initials`. Every card has
+  its date bottom-right: last-called (`-` when never) or, for past cards, that call's date.
+- `ui/settings/SettingsScreen` — theme picker (radio rows with a swatch, each name in its own
+  display font).
 - `GodfatherApplication.appScope` — for writes that must outlive the screen (recording a call).
+
+Generated assets — edit the script, not the output (licences in `docs/THIRD_PARTY.md`):
 - `tools/fetch_icons.py` → `res/drawable/ic_*.xml` (Material Symbols Rounded, Apache 2.0).
+- `tools/fetch_fonts.py` → `res/font/*.ttf` (SIL OFL).
+- `tools/make_icon.py [preview.png]` → the adaptive launcher icon layers (`mipmap-anydpi`, no
+  bitmaps — minSdk 26): the Don in a tuxedo with a red rose, on a coral→sunflower sunset. The
+  monochrome layer (Nothing OS themed icons) is a silhouette with real holes for the details,
+  scaled 1.2× because themed launchers draw it small.

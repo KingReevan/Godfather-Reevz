@@ -28,6 +28,7 @@ import com.reevan.godfatherreevz.ui.navigation.jumpTo
 import com.reevan.godfatherreevz.ui.navigation.pop
 import com.reevan.godfatherreevz.ui.navigation.popTo
 import com.reevan.godfatherreevz.ui.navigation.pushFrom
+import com.reevan.godfatherreevz.ui.settings.SettingsScreen
 import com.reevan.godfatherreevz.util.TodayClock
 import com.reevan.godfatherreevz.util.formatHeaderDate
 
@@ -94,7 +95,7 @@ fun GodfatherApp() {
             when (current) {
                 Destination.Home -> ComingSoon("Home", phase = 4)
                 Destination.Menu -> MenuScreen(onOpen = navigate)
-                Destination.Settings -> ComingSoon("Settings", phase = 2)
+                Destination.Settings -> SettingsScreen()
                 Destination.AddFriend -> ComingSoon("Add Friend", phase = 3)
                 Destination.ContactImport -> ComingSoon("Contacts", phase = 3)
                 Destination.EditFriendList -> ComingSoon("Edit Friend", phase = 5)
