@@ -9,6 +9,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.Lifecycle
@@ -18,6 +19,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.reevan.godfatherreevz.ui.GodfatherApp
 import com.reevan.godfatherreevz.ui.settings.PreferencesViewModel
 import com.reevan.godfatherreevz.ui.theme.GodfatherReevzTheme
+import com.reevan.godfatherreevz.util.LocalCaller
 import com.reevan.godfatherreevz.util.TodayClock
 import com.reevan.godfatherreevz.util.clockChanges
 import kotlinx.coroutines.flow.collectLatest
@@ -59,7 +61,9 @@ class MainActivity : ComponentActivity() {
             }
 
             GodfatherReevzTheme(theme = theme) {
-                GodfatherApp()
+                CompositionLocalProvider(LocalCaller provides (application as GodfatherApplication).caller) {
+                    GodfatherApp()
+                }
             }
         }
     }

@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -91,7 +92,7 @@ fun RemoveFriendScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var selected by rememberSaveable { mutableStateOf(listOf<Long>()) }
     var confirming by rememberSaveable { mutableStateOf(false) }
-    var removedCount by rememberSaveable { mutableStateOf(0) }
+    var removedCount by rememberSaveable { mutableIntStateOf(0) }
     // Before the early return: removing the last friends empties the list (see rememberSubmission).
     val removing = rememberSubmission(viewModel.submissions) {
         messages.show(if (removedCount == 1) "Friend removed" else "$removedCount friends removed")

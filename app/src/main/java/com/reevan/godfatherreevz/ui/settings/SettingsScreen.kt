@@ -44,7 +44,7 @@ import com.reevan.godfatherreevz.ui.theme.colorScheme
 import com.reevan.godfatherreevz.ui.theme.displayFont
 import com.reevan.godfatherreevz.ui.theme.godfatherColors
 
-/** Settings: the theme picker (more sections arrive in phase 7). */
+/** Settings: theme, how Call works, contacts access, Shuffle again, and about. */
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
@@ -62,6 +62,18 @@ fun SettingsScreen(
     ) {
         SectionTitle("Theme")
         ThemePicker(selected = current.theme, onSelect = preferences::setTheme)
+        SectionDivider()
+        SectionTitle("Calling")
+        CallingSection(callDirectly = current.callDirectly, onCallDirectlyChange = preferences::setCallDirectly)
+        SectionDivider()
+        SectionTitle("Contacts")
+        ContactsSection()
+        SectionDivider()
+        SectionTitle("Order")
+        OrderSection()
+        SectionDivider()
+        SectionTitle("About")
+        AboutSection()
     }
 }
 

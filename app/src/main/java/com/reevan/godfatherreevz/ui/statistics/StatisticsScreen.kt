@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -56,7 +57,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import java.time.DayOfWeek
 import java.time.format.TextStyle
-import java.util.Locale
 
 class StatisticsViewModel(application: Application) : ViewModel() {
     private val database = GodfatherDatabase.getInstance(application)
@@ -196,7 +196,7 @@ private fun Tile(
 /** This month as a little calendar: filled days had a call, outlined days were missed. */
 @Composable
 private fun MonthCard(stats: CallStats) {
-    val locale = Locale.getDefault()
+    val locale = LocalConfiguration.current.locales[0]
     val title = stats.month.month.getDisplayName(TextStyle.FULL, locale) + " " + stats.month.year
     Section(title) {
         val leading = stats.month.atDay(1).dayOfWeek.value - DayOfWeek.MONDAY.value
@@ -310,7 +310,7 @@ private fun ago(days: Long) = when (days) {
 /** Calls per month for the last six months, as simple bars. */
 @Composable
 private fun MonthsCard(months: List<MonthCount>) {
-    val locale = Locale.getDefault()
+    val locale = LocalConfiguration.current.locales[0]
     val most = months.maxOf { it.calls }.coerceAtLeast(1)
     Section("Last six months") {
         Row(

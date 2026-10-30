@@ -27,13 +27,11 @@ ICONS = [
     ("menu", "menu", False),
     ("settings", "settings", True),
     ("call", "call", True),
-    ("add", "add", False),
     ("check", "check", False),
     ("check_circle", "check_circle", True),
     ("search", "search", False),
     ("close", "close", False),
     ("contacts", "contacts", True),
-    ("person_add", "person_add", True),
     ("shuffle", "shuffle", False),
     ("undo", "undo", False),
     ("notes", "edit_note", False),
@@ -42,9 +40,6 @@ ICONS = [
     ("streak", "local_fire_department", True),
     ("group", "group", True),
     ("hourglass", "hourglass_bottom", True),
-    ("palette", "palette", True),
-    ("info", "info", True),
-    ("warning", "warning", True),
 ]
 
 

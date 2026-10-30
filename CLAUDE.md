@@ -55,6 +55,12 @@ Windows / PowerShell:
 
 Instrumented tests (`connectedDebugAndroidTest`):
 - `GodfatherDatabaseTest` — the rotation transactions against in-memory Room.
+- `AppFlowsTest` — end-to-end flows through the real Activity and **the real database, which it
+  wipes before every test**: empty Home → first friend, call / redial / undo, off-schedule call,
+  duplicate number, edit + discard guard, remove + stats, shuffle confirm, theme + restart, header
+  buttons. Calls go to `FakeCaller` (set on `GodfatherApplication.caller` before the Activity
+  starts) — nobody is dialled. Add a flow here when adding or changing a user-facing flow.
+  Compose's test clock drives coroutine delays: use `mainClock.advanceTimeBy`, not `Thread.sleep`.
 
 **`connectedAndroidTest` uninstalls the app when it finishes, which deletes the database.** Once I
 use the app for real, back up the phone's database first
@@ -63,7 +69,8 @@ after — or run them on an emulator (`ANDROID_SERIAL=emulator-5554`).
 
 Target phone: **Nothing Phone (2a), Android 16 (API 36)**, adb serial `00050146M001006`. Update it
 with `adb -s 00050146M001006 install -r app/build/outputs/apk/debug/app-debug.apk` (keeps data).
-adb lives in `%LOCALAPPDATA%\Android\Sdk\platform-tools` (not on PATH).
+adb lives in `%LOCALAPPDATA%\Android\Sdk\platform-tools` (not on PATH). The phone's font scale is
+1.15 — if a test changes it, put it back to exactly that.
 
 ## Git
 
@@ -119,8 +126,12 @@ adb lives in `%LOCALAPPDATA%\Android\Sdk\platform-tools` (not on PATH).
 
 ## Current project state
 
-Phases 1–6 of `docs/PLAN.md` are done (foundations, look & feel, Add Friend, Home + details +
-Call, Edit & Remove, Statistics); phase 7 (Settings & polish) remains.
+All seven phases of `docs/PLAN.md` are done. Installed fresh on the phone on 2026-10-30 with zero
+friends. **From the moment real friends are added, schema v1 is frozen** (migrations only) and the
+phone's database must be backed up before any instrumented test run.
+
+Not exercised on a device: the Android 17 picker branch (phone is API 36), a real direct
+`ACTION_CALL`, and midnight rollover by changing the phone's date.
 
 - `data/` — Room schema v1: `friends` (position/turnUsed rotation columns, notes), `calls` (one row
   per friend per day pressed; `scheduled`, `consumedTurn`; FK `SET NULL` on removal),
@@ -144,10 +155,14 @@ Call, Edit & Remove, Statistics); phase 7 (Settings & polish) remains.
 - `ui/common/FriendCards` — `TodayCard` (gradient, pulsing ring until called), `FriendCard`
   (upcoming; optional "Up next" chip), `PastCard` (faded recent call), `Initials`. Every card has
   its date bottom-right: last-called (`-` when never) or, for past cards, that call's date.
-- `ui/settings/SettingsScreen` — theme picker (radio rows with a swatch, each name in its own
-  display font).
+- `ui/settings/` — Settings: theme picker (radio rows with a swatch, each name in its own
+  display font); Calling ("Call directly" switch + phone-permission row); Contacts (permission
+  row); Order (Shuffle again → confirm dialog → `FriendDao.reshuffle` → "Shuffled"); About.
+  Permission rows re-check on resume: "Allow" asks, and once Android stops asking, "Open
+  settings".
 - `GodfatherApplication.appScope` — for writes that must outlive the screen (recording a call,
-  undo, notes).
+  undo, notes, reshuffle). `GodfatherApplication.caller` — what `MainActivity` provides as
+  `LocalCaller` (tests swap in a fake).
 - `ui/home/` — Home's focus stack. **Layout rules are the pure `buildHome`** (pinned by
   `HomeLayoutTest`): today's card = today's scheduled call's friend once made (stays until
   midnight; a removed friend shows by saved name), else the rotation head; upcoming = everyone else

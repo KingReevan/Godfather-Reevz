@@ -2,6 +2,11 @@
 
 > The plan the owner approved on 2026-10-29, kept here so it travels with the code. The product
 > brief and decisions are in [`SPEC.md`](SPEC.md). Keep the phase status table up to date.
+>
+> **Status (2026-10-30): all seven phases done.** Installed fresh on the phone (zero friends).
+> Not exercised on a device: the Android 17 system-picker branch (the phone is API 36), a real
+> direct `ACTION_CALL` (testing only ever used the dialer), and midnight rollover / missed days
+> by changing the phone's date (covered by unit tests and `TodayClock` instead).
 
 ## Context
 
@@ -294,7 +299,7 @@ Each phase ends with a building app, a test run, a report and a local commit. "C
 | 4 | **Home + Details + Call** | The focus stack, details with notes, the Call flow (permission, dialer fallback, idempotent recording), and Undo. 🚩 **Ready for real use.** Test builds go on the phone from Phase 1, but once you start adding real friends, schema v1 is frozen: every change needs a migration, and I back up the phone's database before any test run. | ✅ |
 | 5 | **Edit & Remove** | The editor with discard guard; multi-select remove. | ✅ |
 | 6 | **Statistics** | The pure `CallStats` calculator (streaks, month, tops) with tests, and the Statistics screen. | ✅ |
-| 7 | **Settings & polish** | Call-directly switch, permission statuses, **Shuffle again**, empty states, a check of every theme, lint, a long-name and font-scale pass, and a full pass on the device. |  |
+| 7 | **Settings & polish** | Call-directly switch, permission statuses, **Shuffle again**, empty states, a check of every theme, lint, a long-name and font-scale pass, and a full pass on the device. | ✅ |
 
 ---
 
