@@ -291,7 +291,7 @@ Each phase ends with a building app, a test run, a report and a local commit. "C
 | 1 | **Foundations** | Gradle and manifest setup. Docs (SPEC, PLAN, CLAUDE.md). Schema v1, entities and DAOs. TodayClock. The **rotation engine with its full unit tests**. Back stack, header, Menu screen, placeholder screens. | ✅ |
 | 2 | **Look & feel** | The 6 themes, fonts, `ThemeColorsTest`, the shared `FriendCard`, UI icons, the app icon, and Settings → Theme. | ✅ |
 | 3 | **Add Friend** | Manual form with validation and duplicate checks. The contact importer, with its permission flow and system-picker fallbacks. | ✅ |
-| 4 | **Home + Details + Call** | The focus stack, details with notes, the Call flow (permission, dialer fallback, idempotent recording), and Undo. 🚩 **Ready for real use.** Test builds go on the phone from Phase 1, but once you start adding real friends, schema v1 is frozen: every change needs a migration, and I back up the phone's database before any test run. |  |
+| 4 | **Home + Details + Call** | The focus stack, details with notes, the Call flow (permission, dialer fallback, idempotent recording), and Undo. 🚩 **Ready for real use.** Test builds go on the phone from Phase 1, but once you start adding real friends, schema v1 is frozen: every change needs a migration, and I back up the phone's database before any test run. | ✅ |
 | 5 | **Edit & Remove** | The editor with discard guard; multi-select remove. |  |
 | 6 | **Statistics** | The pure `CallStats` calculator (streaks, month, tops) with tests, and the Statistics screen. |  |
 | 7 | **Settings & polish** | Call-directly switch, permission statuses, **Shuffle again**, empty states, a check of every theme, lint, a long-name and font-scale pass, and a full pass on the device. |  |

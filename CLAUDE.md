@@ -119,8 +119,8 @@ adb lives in `%LOCALAPPDATA%\Android\Sdk\platform-tools` (not on PATH).
 
 ## Current project state
 
-Phases 1–3 of `docs/PLAN.md` are done (foundations, look & feel, Add Friend); later phases fill
-in the placeholder screens (`ui/common/ComingSoon`).
+Phases 1–4 of `docs/PLAN.md` are done (foundations, look & feel, Add Friend, Home + details +
+Call); later phases fill in the placeholder screens (`ui/common/ComingSoon`).
 
 - `data/` — Room schema v1: `friends` (position/turnUsed rotation columns, notes), `calls` (one row
   per friend per day pressed; `scheduled`, `consumedTurn`; FK `SET NULL` on removal),
@@ -146,7 +146,24 @@ in the placeholder screens (`ui/common/ComingSoon`).
   its date bottom-right: last-called (`-` when never) or, for past cards, that call's date.
 - `ui/settings/SettingsScreen` — theme picker (radio rows with a swatch, each name in its own
   display font).
-- `GodfatherApplication.appScope` — for writes that must outlive the screen (recording a call).
+- `GodfatherApplication.appScope` — for writes that must outlive the screen (recording a call,
+  undo, notes).
+- `ui/home/` — Home's focus stack. **Layout rules are the pure `buildHome`** (pinned by
+  `HomeLayoutTest`): today's card = today's scheduled call's friend once made (stays until
+  midnight; a removed friend shows by saved name), else the rotation head; upcoming = everyone else
+  once, in call order; past = the last `PAST_CARDS` calls, one per friend, oldest first — call
+  history, so nothing visibly resets at the end of a pass. `HomeViewModel` lives in the shell;
+  `HomeScroll` (shell-held) keeps the list position across visits and centres today's card when
+  the friend in focus changes.
+- `ui/details/` — friend page: facts, notes (debounced 600ms + saved on leaving, via appScope),
+  "Called today ✓ · Undo" (confirm dialog), Call button. Call = `recordCall()` first (idempotent
+  per friend per day), then `LocalCaller` places it: `ACTION_CALL` if "Call directly" and
+  CALL_PHONE granted, else asks for the permission once and falls back to `ACTION_DIAL`. A 1.5s
+  cool-down stops double taps. `TodayRole` (TO_CALL / CALLED / OTHER) drives the chip and the
+  "not today's call" hint.
+- `util/Caller` — interface + `AndroidCaller`, provided through `LocalCaller` so UI tests can use a
+  fake that never dials. **Never place a real call while testing**: deny the phone permission or
+  turn "Call directly" off, and back out of the dialer.
 - `ui/common/AppMessages` (`LocalAppMessages`) — the app-wide snackbar, owned by the shell so a
   message survives the screen closing; lifted 76dp so it never covers a bottom action button.
 - `ui/common/Submission` — as in Habitz, plus `repeatable = true` for screens that stay open after

@@ -11,6 +11,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -19,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.reevan.godfatherreevz.ui.addfriend.AddFriendScreen
 import com.reevan.godfatherreevz.ui.common.AppMessages
 import com.reevan.godfatherreevz.ui.common.BreadcrumbHeader
@@ -27,6 +29,10 @@ import com.reevan.godfatherreevz.ui.common.HeaderActions
 import com.reevan.godfatherreevz.ui.common.HomeHeader
 import com.reevan.godfatherreevz.ui.common.LocalAppMessages
 import com.reevan.godfatherreevz.ui.contactpicker.ContactImportScreen
+import com.reevan.godfatherreevz.ui.details.FriendDetailsScreen
+import com.reevan.godfatherreevz.ui.home.HomeScreen
+import com.reevan.godfatherreevz.ui.home.HomeScroll
+import com.reevan.godfatherreevz.ui.home.HomeViewModel
 import com.reevan.godfatherreevz.ui.menu.MenuScreen
 import com.reevan.godfatherreevz.ui.navigation.BackStackSaver
 import com.reevan.godfatherreevz.ui.navigation.Destination
@@ -79,6 +85,11 @@ fun GodfatherApp() {
 
     BackHandler(enabled = backStack.size > 1) { leaveTo(backStack.pop()) }
 
+    // Held here rather than in HomeScreen: Home leaves composition while another screen is on top.
+    val home: HomeViewModel = viewModel(factory = HomeViewModel.Factory)
+    val homeState by home.state.collectAsStateWithLifecycle()
+    val homeScroll = remember { HomeScroll() }
+
     val snackbarHost = remember { SnackbarHostState() }
     val shellScope = rememberCoroutineScope()
     val messages = remember(snackbarHost, shellScope) { AppMessages(snackbarHost, shellScope) }
@@ -117,7 +128,12 @@ fun GodfatherApp() {
                 .consumeWindowInsets(innerPadding),
         ) {
             when (current) {
-                Destination.Home -> ComingSoon("Home", phase = 4)
+                Destination.Home -> HomeScreen(
+                    state = homeState,
+                    scroll = homeScroll,
+                    onOpenFriend = { navigate(Destination.FriendDetails(it)) },
+                    onAddFirstFriend = { navigate(Destination.AddFriend) },
+                )
                 Destination.Menu -> MenuScreen(onOpen = navigate)
                 Destination.Settings -> SettingsScreen()
                 Destination.AddFriend -> AddFriendScreen(
@@ -132,7 +148,10 @@ fun GodfatherApp() {
                 Destination.EditFriendList -> ComingSoon("Edit Friend", phase = 5)
                 Destination.RemoveFriend -> ComingSoon("Remove Friend", phase = 5)
                 Destination.Statistics -> ComingSoon("Statistics", phase = 6)
-                is Destination.FriendDetails -> ComingSoon("Friend details", phase = 4)
+                // Keyed by friend, so one friend's page state can never carry into another's.
+                is Destination.FriendDetails -> key(current.friendId) {
+                    FriendDetailsScreen(friendId = current.friendId, onGone = finish(current))
+                }
                 is Destination.EditFriend -> ComingSoon("Edit", phase = 5)
             }
         }
